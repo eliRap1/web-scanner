@@ -4,7 +4,6 @@ from passlib.context import CryptContext
 import re
 import sys
 
-# מאפשר לייבא את database.py שלך
 sys.path.append("D:/Users/Downloads/")
 import database
 
@@ -52,6 +51,7 @@ class RegisterPayload(BaseModel):
 
 # ---------- Helpers ----------
 def hash_password(password: str) -> str:
+    """Hash password using bcrypt"""
     return pwd_context.hash(password)
 
 def is_email_taken(conn, email: str) -> bool:
@@ -68,23 +68,66 @@ def is_username_taken(conn, username: str) -> bool:
 # ---------- Endpoint ----------
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterPayload):
+    """
+    Register a new user.
+    
+    Password requirements:
+    - At least 8 characters
+    - One uppercase letter
+    - One lowercase letter
+    - One digit
+    - One special character
+    """
     conn = database.get_connection()
     try:
+        # Check if username or email already exists
         if is_username_taken(conn, payload.username):
             raise HTTPException(status_code=400, detail="username already taken")
         if is_email_taken(conn, payload.email):
             raise HTTPException(status_code=400, detail="email already registered")
 
+        # Hash password with bcrypt
         password_hash = hash_password(payload.password)
-        user_id = database.create_user(
-            conn,
-            username=payload.username,
-            email=payload.email,
-            password_hash=password_hash,
-            role="user"
-        )
+        print(password_hash)
+        # IMPORTANT: Insert directly to avoid double-hashing
+        # Don't use database.create_user() as it will hash again
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO Users (username, email, password_hash, role, role_level)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            payload.username,
+            payload.email,
+            password_hash,
+            "user",
+            database.ROLE_MAP.get("user", 1)
+        ))
+        conn.commit()
+        user_id = c.lastrowid
 
-        return {"status": "ok", "user_id": user_id, "message": "user created successfully"}
+        return {
+            "status": "ok",
+            "user_id": user_id,
+            "message": "user created successfully"
+        }
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         conn.close()
+
+
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    """Check if the API is running"""
+    return {"status": "ok", "service": "registration"}
+
+
+if __name__ == "__main__":
+    
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

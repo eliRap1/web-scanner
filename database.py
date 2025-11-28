@@ -2,9 +2,24 @@ import sqlite3
 from functools import wraps
 import logging
 from typing import Optional, Tuple, Dict, Any
+import os
+
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    USING_BCRYPT = True
+except ImportError:
+    import hashlib
+    import secrets
+    pwd_context = None
+    USING_BCRYPT = False
+    logging.warning("passlib not installed. Using SHA-256. Install bcrypt: pip install passlib[bcrypt]") # register works on bcrypt
 
 DB_NAME = "web_scanner.db"
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger("database")
 
 def get_connection():
@@ -40,10 +55,8 @@ def create_base_schema(conn):
         start_time DATETIME,
         end_time DATETIME,
         findings_count INTEGER DEFAULT 0,
-        report_id INTEGER,
         notes TEXT,
-        FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
-        FOREIGN KEY (report_id) REFERENCES Reports(report_id) ON DELETE SET NULL
+        FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
     );
     """)
 
@@ -105,6 +118,18 @@ def create_base_schema(conn):
     );
     """)
 
+    # --- SESSIONS (for token management) ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS Sessions (
+        session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
 
 def apply_migrations(conn):
@@ -120,8 +145,6 @@ def apply_migrations(conn):
 
     # v2 
     if current_version < 2:
-        # create_base_schema already added last_login and role_level above,
-        # but keep this for safety if migrating from old schema without those fields.
         try:
             c.execute("ALTER TABLE Users ADD COLUMN last_login DATETIME;")
         except Exception:
@@ -133,6 +156,25 @@ def apply_migrations(conn):
         c.execute("PRAGMA user_version = 2;")
         current_version = 2
         logger.info("[MIGRATION] Upgraded schema -> version 2")
+
+    # v3 - Add Sessions table if needed
+    if current_version < 3:
+        try:
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS Sessions (
+                session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+            );
+            """)
+        except Exception as e:
+            logger.warning(f"Sessions table may already exist: {e}")
+        c.execute("PRAGMA user_version = 3;")
+        current_version = 3
+        logger.info("[MIGRATION] Upgraded schema -> version 3")
 
     conn.commit()
     logger.info(f"[MIGRATION] Current schema version: {current_version}")
@@ -189,14 +231,36 @@ def run_integrity_checks(conn):
         return False
 
 def init_database():
-    conn = get_connection()
+    """Initialize database with proper error handling and logging"""
+    logger.info(f"Initializing database: {DB_NAME}")
+    logger.info(f"Current directory: {os.getcwd()}")
+    logger.info(f"Using password hashing: {'bcrypt' if USING_BCRYPT else 'SHA-256'}")
+    
     try:
-        apply_migrations(conn)
-        run_integrity_checks(conn)
-    finally:
-        conn.close()
+        conn = get_connection()
+        logger.info("Database connection established")
+        
+        try:
+            apply_migrations(conn)
+            logger.info("Migrations completed successfully")
+            
+            run_integrity_checks(conn)
+            logger.info("Integrity checks completed")
+            
+        except Exception as e:
+            logger.error(f"Error during initialization: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+        finally:
+            conn.close()
+            logger.info("Database connection closed")
+            
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
 
-#Premistion Roles
+# Permission Roles
 ROLE_MAP = {
     "readonly": 0,
     "user": 1,
@@ -212,9 +276,7 @@ PERMISSIONS = {
 }
 
 def user_has_permission(role: str, action: str) -> bool:
-    """
-    בודק האם תפקיד מסוים מכיל את ההרשאה לפעולה נתונה.
-    """
+    """Check if a given role includes permission for a specific action."""
     if not role:
         return False
     if role not in PERMISSIONS:
@@ -222,27 +284,123 @@ def user_has_permission(role: str, action: str) -> bool:
     return action in PERMISSIONS[role]
 
 def can_access_scan(user_role: str, user_id: int, scan_owner_id: int) -> bool:
-    """
-    בדיקה פשוטה אם המשתמש יכול לגשת לסריקה מסויימת.
-    """
+    """Check if user can access a specific scan."""
     if user_role in ("admin", "security_officer"):
         return True
     return user_id == scan_owner_id
 
 def can_access_report(user_role: str, user_id: int, report_user_id: int) -> bool:
+    """Check if user can access a specific report."""
     if user_role in ("admin", "security_officer"):
         return True
     return user_id == report_user_id
 
 # -------------------------------
-# row level
+# Password Hashing Utilities
+# -------------------------------
+def hash_password(password: str) -> str:
+    """
+    Hash a password using bcrypt (preferred) or SHA-256 with salt (fallback).
+    """
+    if USING_BCRYPT:
+        return pwd_context.hash(password)
+    else:
+        # Fallback to SHA-256
+        import secrets
+        import hashlib
+        salt = secrets.token_hex(16)
+        pwd_hash = hashlib.sha256((salt + password).encode()).hexdigest()
+        return f"sha256${salt}${pwd_hash}"
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """
+    Verify a password against its stored hash.
+    Supports both bcrypt and SHA-256 formats.
+    """
+    if USING_BCRYPT and not stored_hash.startswith("sha256$"):
+        # Try bcrypt verification
+        try:
+            return pwd_context.verify(password, stored_hash)
+        except Exception:
+            pass
+    
+    # Try SHA-256 format
+    if stored_hash.startswith("sha256$"):
+        try:
+            _, salt, pwd_hash = stored_hash.split('$')
+            import hashlib
+            return hashlib.sha256((salt + password).encode()).hexdigest() == pwd_hash
+        except Exception:
+            return False
+    
+    # Legacy format (salt$hash without prefix)
+    try:
+        salt, pwd_hash = stored_hash.split('$')
+        import hashlib
+        return hashlib.sha256((salt + password).encode()).hexdigest() == pwd_hash
+    except Exception:
+        return False
+
+# -------------------------------
+# Session Management
+# -------------------------------
+def create_session(conn, user_id: int, expires_in_hours: int = 24) -> str:
+    """Create a new session token for a user."""
+    from datetime import datetime, timedelta
+    import secrets
+    
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(hours=expires_in_hours)
+    
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO Sessions (user_id, token, expires_at)
+        VALUES (?, ?, ?)
+    """, (user_id, token, expires_at))
+    conn.commit()
+    return token
+
+def validate_session(conn, token: str) -> Optional[Dict[str, Any]]:
+    """Validate a session token and return user info if valid."""
+    from datetime import datetime
+    
+    c = conn.cursor()
+    row = c.execute("""
+        SELECT s.user_id, u.username, u.role, u.role_level, s.expires_at
+        FROM Sessions s
+        JOIN Users u ON s.user_id = u.user_id
+        WHERE s.token = ?
+    """, (token,)).fetchone()
+    
+    if not row:
+        return None
+    
+    # Check if expired
+    expires_at = row['expires_at']
+    if datetime.fromisoformat(expires_at) < datetime.now():
+        # Delete expired session
+        c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
+        conn.commit()
+        return None
+    
+    return {
+        "user_id": row['user_id'],
+        "username": row['username'],
+        "role": row['role'],
+        "role_level": row['role_level']
+    }
+
+def delete_session(conn, token: str):
+    """Delete a session (logout)."""
+    c = conn.cursor()
+    c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
+    conn.commit()
+
+# -------------------------------
+# Row Level Access Functions
 # -------------------------------
 def get_scans_for_user(conn, user_id: int, user_role: str):
-    """
-    מחזיר רשימת סריקות בהתאם להרשאות המשתמש.
-    admin/security_officer = כל הסריקות
-    user = רק סריקות שלו
-    """
+    """Return list of scans based on user permissions."""
     c = conn.cursor()
     if user_role in ("admin", "security_officer"):
         rows = c.execute("SELECT * FROM Scans ORDER BY start_time DESC").fetchall()
@@ -251,6 +409,7 @@ def get_scans_for_user(conn, user_id: int, user_role: str):
     return [dict(r) for r in rows]
 
 def get_scan_by_id(conn, scan_id: int, requesting_user_id: int, requesting_user_role: str):
+    """Get a specific scan by ID with permission check."""
     c = conn.cursor()
     row = c.execute("SELECT * FROM Scans WHERE scan_id = ?", (scan_id,)).fetchone()
     if not row:
@@ -261,6 +420,7 @@ def get_scan_by_id(conn, scan_id: int, requesting_user_id: int, requesting_user_
     return dict(row)
 
 def get_reports_for_user(conn, user_id: int, user_role: str):
+    """Return list of reports based on user permissions."""
     c = conn.cursor()
     if user_role in ("admin", "security_officer"):
         rows = c.execute("SELECT * FROM Reports ORDER BY created_at DESC").fetchall()
@@ -269,6 +429,7 @@ def get_reports_for_user(conn, user_id: int, user_role: str):
     return [dict(r) for r in rows]
 
 def get_report_by_id(conn, report_id: int, requesting_user_id: int, requesting_user_role: str):
+    """Get a specific report by ID with permission check."""
     c = conn.cursor()
     row = c.execute("SELECT * FROM Reports WHERE report_id = ?", (report_id,)).fetchone()
     if not row:
@@ -278,7 +439,7 @@ def get_report_by_id(conn, report_id: int, requesting_user_id: int, requesting_u
     return dict(row)
 
 def get_logs_for_scan(conn, scan_id: int, requesting_user_id: int, requesting_user_role: str):
-    # בדוק תחילה גישה לסריקה
+    """Get logs for a specific scan with permission check."""
     scan = get_scan_by_id(conn, scan_id, requesting_user_id, requesting_user_role)
     if not scan:
         raise ValueError("Scan not found")
@@ -287,9 +448,10 @@ def get_logs_for_scan(conn, scan_id: int, requesting_user_id: int, requesting_us
     return [dict(r) for r in rows]
 
 # -------------------------------
-# mangment Role / Utilities
+# Role Management / Utilities
 # -------------------------------
 def set_user_role(conn, user_id: int, role: str):
+    """Set a user's role."""
     if role not in ROLE_MAP:
         raise ValueError("Unknown role")
     c = conn.cursor()
@@ -297,7 +459,26 @@ def set_user_role(conn, user_id: int, role: str):
     conn.commit()
     logger.info("Set user %s role -> %s", user_id, role)
 
-def create_user(conn, username: str, email: str, password_hash: str, role: str = "user"):
+def create_user(conn, username: str, email: str, password: str, role: str = "user"):
+    """
+    Create a new user with hashed password.
+    NOTE: This function hashes the password. If you're passing an already-hashed password,
+    use create_user_with_hash() instead.
+    """
+    c = conn.cursor()
+    password_hash = hash_password(password)
+    c.execute("""
+        INSERT INTO Users (username, email, password_hash, role, role_level)
+        VALUES (?, ?, ?, ?, ?)
+    """, (username, email, password_hash, role, ROLE_MAP.get(role, 1)))
+    conn.commit()
+    return c.lastrowid
+
+def create_user_with_hash(conn, username: str, email: str, password_hash: str, role: str = "user"):
+    """
+    Create a new user with an already-hashed password.
+    Use this when the password has already been hashed (e.g., in registration endpoint).
+    """
     c = conn.cursor()
     c.execute("""
         INSERT INTO Users (username, email, password_hash, role, role_level)
@@ -306,96 +487,105 @@ def create_user(conn, username: str, email: str, password_hash: str, role: str =
     conn.commit()
     return c.lastrowid
 
+def authenticate_user(conn, username: str, password: str) -> Optional[Dict[str, Any]]:
+    """Authenticate a user by username and password."""
+    user = get_user_by_username(conn, username)
+    if not user:
+        return None
+    
+    if not verify_password(password, user['password_hash']):
+        return None
+    
+    # Update last login
+    c = conn.cursor()
+    c.execute("UPDATE Users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?", (user['user_id'],))
+    conn.commit()
+    
+    return {
+        "user_id": user['user_id'],
+        "username": user['username'],
+        "email": user['email'],
+        "role": user['role'],
+        "role_level": user['role_level']
+    }
+
 def get_user_by_id(conn, user_id: int) -> Optional[Dict[str, Any]]:
+    """Get user by ID (without password hash)."""
     c = conn.cursor()
     r = c.execute("SELECT user_id, username, email, role, role_level, created_at, last_login FROM Users WHERE user_id = ?", (user_id,)).fetchone()
     return dict(r) if r else None
 
 def get_user_by_username(conn, username: str) -> Optional[Dict[str, Any]]:
+    """Get user by username (includes password hash for authentication)."""
     c = conn.cursor()
     r = c.execute("SELECT * FROM Users WHERE username = ?", (username,)).fetchone()
     return dict(r) if r else None
 
 # ---------------------------------------
-# api
+# API Authentication Helper
 # ---------------------------------------
-
-# ---------- Helper
 def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
-    """
-    STUB: החלף את המימוש לפי השיטה שלך (JWT validation וכו').
-    הפונקציה מחזירה dict עם user_id ו-role לפחות:
-        {"user_id": 1, "username": "alice", "role": "admin"}
-    """
-    # --- דוגמא סטאטית לשימוש מקומי בלבד ---
-    # אם הטוקן == "admin-token" נחזיר admin; אם "user-token" נחזיר user וכו'.
-    # החלף למימוש אמיתי עם JWT או DB lookup ב־sessions.
+    """Validate token and return user info."""
     if not token:
         return None
-    if token == "admin-token":
-        return {"user_id": 1, "username": "admin", "role": "admin"}
-    if token == "sec-token":
-        return {"user_id": 2, "username": "secuser", "role": "security_officer"}
-    if token == "user-token":
-        return {"user_id": 3, "username": "regular", "role": "user"}
-    return None
+    
+    conn = get_connection()
+    try:
+        return validate_session(conn, token)
+    finally:
+        conn.close()
 
 # ---------- Flask-style decorator ----------
 def requires_role(min_role: str):
-    """
-    דקורטור לשימוש בפונקציות/handlers בסגנון Flask.
-    min_role יכול להיות 'user','security_officer','admin' - המשתמש חייב להיות בעל רמת role_level >= של min_role.
-    דוגמה:
-        @requires_role("security_officer")
-        def admin_only_route(...):
-            ...
-    """
+    """Decorator for Flask routes requiring minimum role level."""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # מנסה לקרוא Authorization header (Bearer token)
             try:
                 from flask import request, abort
-            except Exception:
-                logger.debug("Flask not installed or not in request context")
-                raise RuntimeError("Flask context not available for requires_role decorator")
+            except ImportError:
+                raise RuntimeError("Flask not installed. Install with: pip install flask")
 
             auth = request.headers.get("Authorization", "")
             token = None
             if auth.startswith("Bearer "):
                 token = auth.split(" ", 1)[1]
+            
             user = get_user_from_token(token)
             if not user:
                 abort(401, description="Unauthorized")
 
             user_role = user.get("role")
-            # השוואת רמות
             if ROLE_MAP.get(user_role, 0) < ROLE_MAP.get(min_role, 0):
                 abort(403, description="Forbidden - insufficient role")
-            # מוסיפים את המשתמש ל־kwargs למקרה שהפונקציה צריכה אותו
+            
             kwargs["_current_user"] = user
             return func(*args, **kwargs)
         return wrapper
     return decorator
 
-# ---------- Flask-style requires_permission ----------
 def requires_permission(permission: str):
+    """Decorator for Flask routes requiring specific permission."""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 from flask import request, abort
-            except Exception:
-                raise RuntimeError("Flask context not available")
+            except ImportError:
+                raise RuntimeError("Flask not installed")
+            
             auth = request.headers.get("Authorization", "")
             token = None
             if auth.startswith("Bearer "):
                 token = auth.split(" ", 1)[1]
+            
             user = get_user_from_token(token)
             if not user:
                 abort(401, description="Unauthorized")
+            
             if not user_has_permission(user.get("role"), permission):
                 abort(403, description="Forbidden - missing permission")
+            
             kwargs["_current_user"] = user
             return func(*args, **kwargs)
         return wrapper
@@ -403,91 +593,109 @@ def requires_permission(permission: str):
 
 # ---------- FastAPI dependency injection ----------
 def fastapi_requires_role(min_role: str):
-    """
-    שימוש ב-FastAPI:
-        @app.get("/admin")
-        async def admin_endpoint(current_user=Depends(fastapi_requires_role("admin"))):
-            # current_user בידיים שלך
-    """
-    from fastapi import Depends, HTTPException, status, Request
+    """FastAPI dependency for role-based access control."""
+    try:
+        from fastapi import Depends, HTTPException, status, Request
+    except ImportError:
+        raise RuntimeError("FastAPI not installed. Install with: pip install fastapi")
 
     async def dependency(request: Request):
         auth = request.headers.get("Authorization", "")
         token = None
         if auth.startswith("Bearer "):
             token = auth.split(" ", 1)[1]
+        
         user = get_user_from_token(token)
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        
         if ROLE_MAP.get(user.get("role"), 0) < ROLE_MAP.get(min_role, 0):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        
         return user
+    
     return Depends(dependency)
 
 def fastapi_requires_permission(permission: str):
-    from fastapi import Depends, HTTPException, status, Request
+    """FastAPI dependency for permission-based access control."""
+    try:
+        from fastapi import Depends, HTTPException, status, Request
+    except ImportError:
+        raise RuntimeError("FastAPI not installed")
+    
     async def dependency(request: Request):
         auth = request.headers.get("Authorization", "")
         token = None
         if auth.startswith("Bearer "):
             token = auth.split(" ", 1)[1]
+        
         user = get_user_from_token(token)
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        
         if not user_has_permission(user.get("role"), permission):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        
         return user
+    
     return Depends(dependency)
 
 # ---------------------------------------
-# דוגמאות שימוש (Flask / FastAPI)
-# ---------------------------------------
-# Flask:
-# from flask import Flask, jsonify
-# app = Flask(_name_)
-#
-# @app.route('/scans')
-# @requires_role('user')   # לפחות user
-# def scans_endpoint(_current_user=None):
-#     conn = get_connection()
-#     data = get_scans_for_user(conn, _current_user['user_id'], _current_user['role'])
-#     conn.close()
-#     return jsonify(data)
-#
-# FastAPI:
-# from fastapi import FastAPI, Depends
-# app = FastAPI()
-#
-# @app.get("/scans")
-# async def scans_endpoint(current_user=fastapi_requires_role('user')):
-#     conn = get_connection()
-#     data = get_scans_for_user(conn, current_user['user_id'], current_user['role'])
-#     conn.close()
-#     return data
-
-# ---------------------------------------
-# פונקציות בדיקה/עזרה להטמעה
+# Utility Functions
 # ---------------------------------------
 def ensure_admin_exists():
-    """
-    יוצר משתמש דיפולטיבי admin אם אין אחד כזה במסד (לנוחות פיתוח).
-    אל תשתמש בזה בפרודקשן ללא החלפה של הסיסמא!
-    """
+    """Create default admin user if none exists (for development only)."""
+    logger.info("Checking for admin user...")
     conn = get_connection()
     try:
         c = conn.cursor()
         r = c.execute("SELECT user_id FROM Users WHERE role = 'admin' LIMIT 1").fetchone()
         if r:
-            logger.debug("Admin already exists")
+            logger.info(f"Admin user already exists (ID: {r[0]})")
             return
-        #just an example
-        create_user(conn, username="admin", email="admin@example.com", password_hash="changeme", role="admin")
-        logger.info("Created default admin user (username=admin)")
+        
+        logger.info("Creating default admin user...")
+        user_id = create_user(conn, username="admin", email="admin@example.com", password="Admin@123", role="admin")
+        logger.warning(f"Created default admin user (ID: {user_id}, username=admin, password=Admin@123) - CHANGE THIS PASSWORD!")
+    except Exception as e:
+        logger.error(f"Error ensuring admin exists: {e}")
+        raise
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
-    init_database()
-    ensure_admin_exists()
-    logger.info("Database ready.")
+    print("="*60)
+    print("INITIALIZING DATABASE")
+    print("="*60)
+    print(f"Database file: {DB_NAME}")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Password hashing: {'bcrypt' if USING_BCRYPT else 'SHA-256'}")
+    print()
+    
+    try:
+        init_database()
+        ensure_admin_exists()
+        print("\n" + "="*60)
+        print("✓ DATABASE INITIALIZATION COMPLETE")
+        print("="*60)
+        
+        # Show what was created
+        conn = get_connection()
+        c = conn.cursor()
+        tables = c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        print(f"\nCreated {len(tables)} tables:")
+        for table in tables:
+            count = c.execute(f"SELECT COUNT(*) FROM {table[0]}").fetchone()[0]
+            print(f"  - {table[0]}: {count} rows")
+        conn.close()
+        
+        print("\n✓ Database is ready to use!")
+        
+    except Exception as e:
+        print("\n" + "="*60)
+        print("✗ DATABASE INITIALIZATION FAILED")
+        print("="*60)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
