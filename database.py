@@ -396,6 +396,46 @@ def delete_session(conn, token: str):
     c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
     conn.commit()
 
+def refresh_session(conn, token: str, expires_in_hours: int = 24) -> Optional[str]:
+    """
+    Refresh an existing session token.
+
+    Behavior:
+    - If token is valid & not expired → rotate token (new random token) and extend its expiry.
+    - If token is invalid or expired → return None.
+    """
+    from datetime import datetime, timedelta
+    import secrets
+
+    c = conn.cursor()
+    row = c.execute(
+        "SELECT session_id, user_id, expires_at FROM Sessions WHERE token = ?",
+        (token,)
+    ).fetchone()
+
+    if not row:
+        return None
+
+    expires_at = row["expires_at"]
+
+    # If session already expired – remove it and return None
+    if datetime.fromisoformat(expires_at) < datetime.now():
+        c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
+        conn.commit()
+        return None
+
+    # Rotate token + extend expiry
+    new_token = secrets.token_urlsafe(32)
+    new_expires = datetime.now() + timedelta(hours=expires_in_hours)
+
+    c.execute(
+        "UPDATE Sessions SET token = ?, expires_at = ? WHERE session_id = ?",
+        (new_token, new_expires, row["session_id"])
+    )
+    conn.commit()
+    return new_token
+
+
 # -------------------------------
 # Row Level Access Functions
 # -------------------------------
