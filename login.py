@@ -201,29 +201,28 @@ def refresh_token(payload: RefreshPayload, request: Request):
 
 
 @app.get("/verify", response_model=VerifyResponse)
-def verify_token(token: str):
-    """
-    Verify if a token is valid.
+def verify_token(request: Request, token: Optional[str] = None):
+    """Verify if a token is valid.
 
-    Pass token as query parameter: /verify?token=your_token_here
+    Token can be sent in:
+    - Preferred: Authorization: Bearer <token>
+    - Backward-compat: query parameter /verify?token=<token>
     """
-    user = database.get_user_from_token(token)
+    extracted = extract_token_from_request(request, token)
+    user = database.get_user_from_token(extracted) if extracted else None
 
     if not user:
-        return VerifyResponse(
-            status="ok",
-            valid=False,
-            user_id=None,
-            username=None,
-            role=None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
         )
 
     return VerifyResponse(
         status="ok",
         valid=True,
-        user_id=user['user_id'],
-        username=user['username'],
-        role=user['role']
+        user_id=user["user_id"],
+        username=user["username"],
+        role=user["role"]
     )
 
 

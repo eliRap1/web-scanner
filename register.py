@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
-from passlib.context import CryptContext
 import re
 import sys
 
@@ -9,7 +8,6 @@ import database
 
 app = FastAPI(title="Web Scanner - Auth (Registration)")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ---------- Models ----------
 class RegisterPayload(BaseModel):
@@ -51,8 +49,8 @@ class RegisterPayload(BaseModel):
 
 # ---------- Helpers ----------
 def hash_password(password: str) -> str:
-    """Hash password using bcrypt"""
-    return pwd_context.hash(password)
+    """Hash password using the project's DB hashing utility."""
+    return database.hash_password(password)
 
 def is_email_taken(conn, email: str) -> bool:
     c = conn.cursor()
@@ -88,22 +86,15 @@ def register(payload: RegisterPayload):
 
         # Hash password with bcrypt
         password_hash = hash_password(payload.password)
-        print(password_hash)
         # IMPORTANT: Insert directly to avoid double-hashing
         # Don't use database.create_user() as it will hash again
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO Users (username, email, password_hash, role, role_level)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            payload.username,
-            payload.email,
-            password_hash,
-            "user",
-            database.ROLE_MAP.get("user", 1)
-        ))
-        conn.commit()
-        user_id = c.lastrowid
+        user_id = database.create_user_with_hash(
+            conn,
+            username=payload.username,
+            email=payload.email,
+            password_hash=password_hash,
+            role="user",
+        )
 
         return {
             "status": "ok",

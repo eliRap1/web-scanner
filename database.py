@@ -15,7 +15,9 @@ except ImportError:
     USING_BCRYPT = False
     logging.warning("passlib not installed. Using SHA-256. Install bcrypt: pip install passlib[bcrypt]") # register works on bcrypt
 
-DB_NAME = "web_scanner.db"
+# Allow overriding DB path for tests / different environments
+# Example: WEB_SCANNER_DB=/tmp/test.db
+DB_NAME = os.environ.get("WEB_SCANNER_DB", "web_scanner.db")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -23,7 +25,8 @@ logging.basicConfig(
 logger = logging.getLogger("database")
 
 def get_connection():
-    conn = sqlite3.connect(DB_NAME)
+    # check_same_thread=False makes it safer for FastAPI TestClient usage
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
@@ -375,9 +378,27 @@ def validate_session(conn, token: str) -> Optional[Dict[str, Any]]:
     if not row:
         return None
     
+    def _parse_dt(value):
+        """Parse sqlite datetime column into a Python datetime."""
+        if value is None:
+            return None
+        if hasattr(value, "year") and hasattr(value, "month"):
+            return value  # already datetime
+        # sqlite often returns 'YYYY-MM-DD HH:MM:SS[.ffffff]'
+        try:
+            return datetime.fromisoformat(str(value))
+        except Exception:
+            from datetime import datetime as _dt
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+                try:
+                    return _dt.strptime(str(value), fmt)
+                except Exception:
+                    pass
+            raise
+
     # Check if expired
-    expires_at = row['expires_at']
-    if datetime.fromisoformat(expires_at) < datetime.now():
+    expires_at = _parse_dt(row['expires_at'])
+    if expires_at and expires_at < datetime.now():
         # Delete expired session
         c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
         conn.commit()
@@ -395,6 +416,15 @@ def delete_session(conn, token: str):
     c = conn.cursor()
     c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
     conn.commit()
+
+def rotate_session(conn, old_token: str, expires_in_hours: int = 24) -> Optional[str]:
+    """Rotate an existing valid token into a new token (simple refresh)."""
+    user = validate_session(conn, old_token)
+    if not user:
+        return None
+    # Invalidate old and create new
+    delete_session(conn, old_token)
+    return create_session(conn, user["user_id"], expires_in_hours=expires_in_hours)
 
 def refresh_session(conn, token: str, expires_in_hours: int = 24) -> Optional[str]:
     """
@@ -416,10 +446,15 @@ def refresh_session(conn, token: str, expires_in_hours: int = 24) -> Optional[st
     if not row:
         return None
 
-    expires_at = row["expires_at"]
+    expires_at_raw = row["expires_at"]
+    try:
+        expires_at = datetime.fromisoformat(str(expires_at_raw))
+    except Exception:
+        from datetime import datetime as _dt
+        expires_at = _dt.strptime(str(expires_at_raw), "%Y-%m-%d %H:%M:%S")
 
     # If session already expired – remove it and return None
-    if datetime.fromisoformat(expires_at) < datetime.now():
+    if expires_at < datetime.now():
         c.execute("DELETE FROM Sessions WHERE token = ?", (token,))
         conn.commit()
         return None
