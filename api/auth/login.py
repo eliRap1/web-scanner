@@ -1,12 +1,10 @@
 from fastapi import FastAPI, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional
-import sys
+from fastapi import APIRouter
+router = APIRouter()
+import db.database as database
 
-sys.path.append("D:/Users/Downloads/")
-import database
-
-app = FastAPI(title="Web Scanner - Auth (Login)")
 
 # ---------- Models ----------
 
@@ -72,7 +70,7 @@ def extract_token_from_request(request: Request, body_token: Optional[str]) -> O
 
 # ---------- Endpoints ----------
 
-@app.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse)
 def login(payload: LoginPayload):
     """
     Authenticate user and return session token.
@@ -114,39 +112,38 @@ def login(payload: LoginPayload):
         conn.close()
 
 
-@app.post("/logout")
-def logout(payload: LogoutPayload, request: Request):
+@router.post("/logout")
+def logout(
+    request: Request,
+    payload: Optional[LogoutPayload] = None
+):
     """
     Logout user by invalidating their session token.
 
-    You can send the token in one of two ways:
-    - Preferred:   Authorization: Bearer <token>
-    - Fallback:    {"token": "<token>"} in request body
+    Token sources:
+    - Authorization: Bearer <token>
+    - Optional JSON body: {"token": "<token>"}
     """
     conn = database.get_connection()
     try:
-        token = extract_token_from_request(request, payload.token)
+        token = extract_token_from_request(
+            request,
+            payload.token if payload else None
+        )
 
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing token (send in Authorization header or body)"
+                detail="Missing token (send Authorization header or body)"
             )
 
-        # This will delete the session if it exists; if not, it's a no-op.
         database.delete_session(conn, token)
 
         return {"status": "ok", "message": "logged out successfully"}
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Logout failed: {str(e)}")
     finally:
         conn.close()
-
-
-@app.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse)
 def refresh_token(payload: RefreshPayload, request: Request):
     """
     Refresh an existing valid token.
@@ -200,7 +197,7 @@ def refresh_token(payload: RefreshPayload, request: Request):
         conn.close()
 
 
-@app.get("/verify", response_model=VerifyResponse)
+@router.get("/verify", response_model=VerifyResponse)
 def verify_token(request: Request, token: Optional[str] = None):
     """Verify if a token is valid.
 
@@ -226,12 +223,12 @@ def verify_token(request: Request, token: Optional[str] = None):
     )
 
 
-@app.get("/health")
+@router.get("/health")
 def health_check():
     """Check if the API is running"""
     return {"status": "ok", "service": "login"}
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+#if __name__ == "__main__":
+#    import uvicorn
+#    uvicorn.run(app, host="0.0.0.0", port=8002)

@@ -1,12 +1,12 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
 import re
-import sys
 
-sys.path.append("D:/Users/Downloads/")
-import database
+import db.database as database
+from fastapi import APIRouter
+router = APIRouter()
 
-app = FastAPI(title="Web Scanner - Auth (Registration)")
+#app = FastAPI(title="Web Scanner - Auth (Registration)")
 
 
 # ---------- Models ----------
@@ -64,7 +64,7 @@ def is_username_taken(conn, username: str) -> bool:
 
 
 # ---------- Endpoint ----------
-@app.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterPayload):
     """
     Register a new user.
@@ -112,7 +112,7 @@ def register(payload: RegisterPayload):
 
 
 # Health check endpoint
-@app.get("/health")
+@router.get("/health")
 def health_check():
     """Check if the API is running"""
     return {"status": "ok", "service": "registration"}

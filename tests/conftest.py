@@ -21,7 +21,7 @@ def temp_db(tmp_path: Path, monkeypatch):
     # Must set env BEFORE importing database/login/register modules
     monkeypatch.setenv("WEB_SCANNER_DB", str(db_path))
 
-    import database
+    import db.database as database
     importlib.reload(database)
 
     database.init_database()
@@ -45,6 +45,6 @@ def login_client(temp_db):
 
 @pytest.fixture()
 def db_module(temp_db):
-    import database
+    import db.database as database
     importlib.reload(database)
     return database
