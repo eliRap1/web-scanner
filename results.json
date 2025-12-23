@@ -1,0 +1,729 @@
+[
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/irc/stats.php?nickname=&start=0",
+    "method": "POST",
+    "parameters": [
+      "mode",
+      "order",
+      "submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/irc/stats.php?mode=words&order=DESC",
+    "method": "POST",
+    "parameters": [
+      "nickname",
+      "Submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/irc/stats.php?mode=words&order=DESC",
+    "method": "POST",
+    "parameters": [
+      "nickname",
+      "Submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/irc/stats.php?nickname=&start=0",
+    "method": "POST",
+    "parameters": [
+      "mode",
+      "order",
+      "submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/hof",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/hof",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/search",
+    "method": "POST",
+    "parameters": [
+      "username"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/register/submit",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "password2",
+      "question",
+      "answer",
+      "answer2",
+      "email",
+      "email2",
+      "validation"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "anonymous"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/articles/read/1155",
+    "method": "POST",
+    "parameters": [
+      "slcVote"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/articles/read/1154",
+    "method": "POST",
+    "parameters": [
+      "slcVote"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/online/",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/online/",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/articles/read/1158",
+    "method": "POST",
+    "parameters": [
+      "slcVote"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/articles/article.php",
+    "method": "POST",
+    "parameters": [
+      "txtSearch",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/articles/read/1156",
+    "method": "POST",
+    "parameters": [
+      "slcVote"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/online/",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/online/",
+    "method": "POST",
+    "parameters": [
+      "intCurrentPage",
+      "btnSubmit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/user/login",
+    "method": "POST",
+    "parameters": [
+      "username",
+      "password",
+      "btn_submit"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/articles/read/1157",
+    "method": "POST",
+    "parameters": [
+      "slcVote"
+    ],
+    "context": "form"
+  },
+  {
+    "url": "https://www.hackthissite.org/pages/comments/com_delete.php",
+    "method": "GET",
+    "parameters": [],
+    "context": "form"
+  }
+]
