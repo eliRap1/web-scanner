@@ -103,8 +103,8 @@ def test_scanner(token):
 
     headers = {"Authorization": f"Bearer {token}"}
     params = {
-        "url": "https://example.com",
-        "max_pages": 3
+        "url": "https://www.hackthissite.org/",
+        "max_pages": 15
     }
 
     r = requests.post(SCAN_URL, headers=headers, params=params)

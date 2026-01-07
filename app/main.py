@@ -6,6 +6,8 @@ from api.auth.login import router as login_router
 from api.auth.register import router as register_router
 from scans.scans_router import router as scans_router
 from db.database import init_database, ensure_admin_exists
+from fastapi.middleware.cors import CORSMiddleware
+
 
 
 @asynccontextmanager
@@ -39,3 +41,10 @@ def root():
         "service": "web-scanner",
         "docs": "/docs"
     }
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
