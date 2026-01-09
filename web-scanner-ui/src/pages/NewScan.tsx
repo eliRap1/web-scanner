@@ -134,10 +134,20 @@ export default function NewScan() {
 
       {error && <p className="error" style={{ color: "red", marginTop: "10px" }}>{error}</p>}
 
-      {result && (
+            {result && (
         <div style={{ marginTop: 30 }}>
           <h2>Scan Results</h2>
-          <pre className="card" style={{ overflowX: "auto", background: "#f4f4f4", padding: "10px" }}>
+
+          {/* UPDATE: Added 'color: "black"' to make text visible */}
+          <pre 
+            className="card" 
+            style={{ 
+                overflowX: "auto", 
+                background: "#f4f4f4", // Light grey background
+                padding: "10px",
+                color: "black"         // THIS MAKES TEXT VISIBLE
+            }}
+          >
             {JSON.stringify(result, null, 2)}
           </pre>
         </div>
