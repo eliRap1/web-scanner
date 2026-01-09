@@ -31,6 +31,7 @@ def extract_forms(html: str, base_url: str) -> list[Form]:
             fields.append(FormField(
                 name=name,
                 type=inp.get("type", "text"),
+                value=inp.get("value", ""), 
                 required=inp.has_attr("required")
             ))
 

@@ -22,6 +22,7 @@ export default function Sidebar() {
     <div className="sidebar">
       <h2>Web Scanner</h2>
       <a href="/">Dashboard</a>
+	  <a href="/scan">New Scan</a>
       <button onClick={logout}>Logout</button>
     </div>
   )

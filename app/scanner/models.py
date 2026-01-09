@@ -6,7 +6,8 @@ from typing import List
 class FormField:
     name: str
     type: str
-    required: bool
+    value: str = ""  # capture default values (CSRF tokens)
+    required: bool = False
 
 
 @dataclass

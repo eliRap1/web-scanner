@@ -1,14 +1,14 @@
 import json
-from scanner.engine import WebScanner
+from engine import WebScanner
 
 OUTPUT_FILE = "results.json"
 
 
 def main():
-    target_url = "https://www.hackthissite.org/"
+    target_url = "https://www.hackthissite.org"
 
     scanner = WebScanner(
-        start_url=target_url,
+        url=target_url,
         max_pages=50
     )
 

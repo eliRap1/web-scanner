@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     init_database()
     ensure_admin_exists()
     yield
-    # Shutdown (אם תרצה בהמשך)
+    # Shutdown (if needed)
 
 
 app = FastAPI(

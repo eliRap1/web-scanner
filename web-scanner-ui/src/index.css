@@ -98,3 +98,7 @@ body {
   text-decoration: underline;
 }
 
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
