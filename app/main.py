@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-
+from scanner.worker import start_worker 
 from security.middleware import auth_middleware
 from api.auth.login import router as login_router
 from api.auth.register import router as register_router
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     # Startup
     init_database()
     ensure_admin_exists()
+    start_worker()
     yield
     # Shutdown (if needed)
 

@@ -737,7 +737,34 @@ def ensure_admin_exists():
         raise
     finally:
         conn.close()
+# ... existing imports ...
 
+# -------------------------------
+# Logging & Anomaly Helpers
+# -------------------------------
+
+def insert_log(conn, scan_id: int, level: str, message: str):
+    """
+    Inserts a log entry into the Logs table.
+    Levels: 'info', 'warning', 'error'.
+    """
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO Logs (scan_id, level, message, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+        (scan_id, level, message)
+    )
+    conn.commit()
+
+def get_scan_logs(conn, scan_id: int):
+    """
+    Retrieves all logs for a specific scan, ordered by time.
+    """
+    c = conn.cursor()
+    rows = c.execute(
+        "SELECT * FROM Logs WHERE scan_id = ? ORDER BY created_at ASC",
+        (scan_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 if __name__ == "__main__":
     print("="*60)
