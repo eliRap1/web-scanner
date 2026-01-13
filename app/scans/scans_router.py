@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Request, HTTPException
-from ..scanner.models import ScanTarget
-from ..scanner.auth_manager import AuthenticationManager
-from ..scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
-from ..db import database as db
+from scanner.models import ScanTarget
+from scanner.auth_manager import AuthenticationManager
+from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
+from db import database as db
 from typing import List, Optional, Union, Dict
 import requests
-from ..scanner.task_queue import uuid_to_db_id
-from ..db.database import get_connection, get_logs_for_scan
+from scanner.task_queue import uuid_to_db_id
+from db.database import get_connection, get_logs_for_scan
 
 router = APIRouter(tags=["scanner"])
 
