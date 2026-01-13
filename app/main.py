@@ -7,12 +7,14 @@ from api.auth.register import router as register_router
 from scans.scans_router import router as scans_router
 from db.database import init_database, ensure_admin_exists
 from fastapi.middleware.cors import CORSMiddleware
+from scanner.task_queue import recover_stuck_scans_on_startup
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     init_database()
     ensure_admin_exists()
+    recover_stuck_scans_on_startup()
     start_worker()
     yield
     # Shutdown (if needed)
