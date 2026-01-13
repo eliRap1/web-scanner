@@ -21,6 +21,13 @@ job_results = {}
 # Progress: Real-time data (current_url, visited_count, targets_so_far)
 job_progress = {}
 
+# Attempts: retry counters per job
+job_attempts = {}
+
+# Retry configuration (Feature 4.4)
+# MAX_RETRIES = number of *additional* tries after the first attempt.
+MAX_RETRIES = 2
+
 # NEW: Global Map to link UUID -> Integer Database ID
 uuid_to_db_id = {}
 
@@ -64,6 +71,9 @@ def add_job(url: str, max_pages: int, cookies=None, user_id: int = None) -> str:
         with job_lock:
             job_queue.put(job_data)
             job_status[job_uuid] = "pending"
+
+            # Initialize retry counters
+            job_attempts[job_uuid] = 0
             
             # Initialize progress tracking
             job_progress[job_uuid] = {
@@ -71,6 +81,9 @@ def add_job(url: str, max_pages: int, cookies=None, user_id: int = None) -> str:
                 "visited_count": 0,
                 "found_count": 0,
                 "status": "pending",
+                "attempt": 0,
+                "max_retries": MAX_RETRIES,
+                "last_error": "",
                 "targets_so_far": [] # List to store live targets
             }
     
@@ -166,6 +179,56 @@ def set_job_progress(job_uuid: str, data: dict):
 def get_job_progress(job_uuid: str):
     with job_lock:
         return job_progress.get(job_uuid)
+
+
+# --- Retry helpers (Feature 4.4) ---
+
+def increment_attempt(job_uuid: str) -> int:
+    """Increment and return the current attempt number (1-based for display)."""
+    with job_lock:
+        prev = job_attempts.get(job_uuid, 0)
+        job_attempts[job_uuid] = prev + 1
+        # Keep progress in sync
+        if job_uuid in job_progress:
+            job_progress[job_uuid]["attempt"] = job_attempts[job_uuid]
+        return job_attempts[job_uuid]
+
+def get_attempt(job_uuid: str) -> int:
+    with job_lock:
+        return job_attempts.get(job_uuid, 0)
+
+def can_retry(job_uuid: str) -> bool:
+    """True if we still have retries left (MAX_RETRIES additional tries)."""
+    # attempts is how many times we already tried (1..N).
+    # Allow total attempts = 1 + MAX_RETRIES.
+    return get_attempt(job_uuid) < (1 + MAX_RETRIES)
+
+def set_job_failure(job_uuid: str, error_message: str):
+    """Mark job failed (in-memory + DB) and store error result."""
+    # Store result
+    with job_lock:
+        job_results[job_uuid] = {"error": error_message}
+        job_status[job_uuid] = "failed"
+        if job_uuid in job_progress:
+            job_progress[job_uuid]["status"] = "failed"
+            job_progress[job_uuid]["last_error"] = error_message
+
+    # Update DB
+    db_scan_id = uuid_to_db_id.get(job_uuid)
+    if db_scan_id:
+        conn = get_connection()
+        try:
+            c = conn.cursor()
+            c.execute(
+                "UPDATE Scans SET status = 'failed', end_time = CURRENT_TIMESTAMP WHERE scan_id = ?",
+                (db_scan_id,)
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            logger.exception("Failed to mark job failed in DB")
+        finally:
+            conn.close()
 
 # --- Worker Logic ---
 
