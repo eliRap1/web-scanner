@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Request, HTTPException
-from scanner.models import ScanTarget
-from scanner.auth_manager import AuthenticationManager
-from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
+from ..scanner.models import ScanTarget
+from ..scanner.auth_manager import AuthenticationManager
+from ..scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
+from ..db import database as db
 from typing import List, Optional, Union, Dict
 import requests
+from ..scanner.task_queue import uuid_to_db_id
+from ..db.database import get_connection, get_logs_for_scan
 
 router = APIRouter(tags=["scanner"])
 
@@ -46,54 +49,21 @@ def start_scan(
     }
 
 @router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, str]])
-def get_scan_status(job_id: str):
-    """
-    Returns scan results or error information.
-    - On completion: Returns list of ScanTarget objects
-    - On error: Returns {"error": "message"}
-    """
-    status = get_job_status(job_id)
-    
-    if status == "pending":
-        raise HTTPException(status_code=202, detail="Scan is in queue.")
-    elif status == "running":
-        raise HTTPException(status_code=202, detail="Scan is currently running...")
-    elif status == "failed":
-        result = get_job_result(job_id)
-        # Return error dict with proper structure
-        error_msg = result.get("error", "Unknown error") if isinstance(result, dict) else str(result)
-        return {"error": error_msg}
-    
-    # If status is "completed"
-    result = get_job_result(job_id)
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="Job not found or expired")
-    
-    # Check if result is an error dict (can happen if scan crashed)
-    if isinstance(result, dict) and "error" in result:
-        return {"error": result["error"]}
-        
-    return result
+def get_scan_status(job_id: str, request: Request):
+    _authorize_job_access(job_id, request)
+    return get_job_result(job_id)
 
 @router.get("/{job_id}/progress")
-def get_scan_progress(job_id: str):
-    """
-    Returns real-time progress of the scan.
-    """
-    progress = get_job_progress(job_id)
-    
-    if not progress:
-        raise HTTPException(status_code=404, detail="Job not found.")
-        
-    return progress
+def get_scan_progress(job_id: str, request: Request):
+    _authorize_job_access(job_id, request)
+    return get_job_progress(job_id)
 
 @router.get("/{job_id}/logs")
 def get_scan_logs(job_id: str, request: Request):
     """
     Returns logs for a specific scan job.
     """
-    from scanner.task_queue import uuid_to_db_id
+    
     
     # 1. Get the DB scan_id from the UUID
     db_scan_id = uuid_to_db_id.get(job_id)
@@ -107,7 +77,6 @@ def get_scan_logs(job_id: str, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     # 3. Fetch logs from database
-    from db.database import get_connection, get_logs_for_scan
     conn = get_connection()
     try:
         logs = get_logs_for_scan(
@@ -123,3 +92,34 @@ def get_scan_logs(job_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+        
+def _authorize_job_access(job_id: str, request: Request) -> int:
+    """
+    Returns db_scan_id if the current user is allowed to access this job.
+    Raises HTTPException(404/403) otherwise.
+    """
+    current_user = getattr(request.state, "user", None)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # uuid -> db scan id
+    db_scan_id = uuid_to_db_id.get(job_id)
+    if not db_scan_id:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+
+    # Permission check via DB helper (owner/admin/security_officer)
+    conn = db.get_connection()
+    try:
+        try:
+            db.get_scan_by_id(
+                conn,
+                db_scan_id,
+                current_user["user_id"],
+                current_user["role"]
+            )
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    finally:
+        conn.close()
+
+    return db_scan_id

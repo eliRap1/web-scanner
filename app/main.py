@@ -8,8 +8,6 @@ from scans.scans_router import router as scans_router
 from db.database import init_database, ensure_admin_exists
 from fastapi.middleware.cors import CORSMiddleware
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
