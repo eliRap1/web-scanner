@@ -2,6 +2,9 @@ import threading
 import time
 from scanner.engine import WebScanner
 from scanner.task_queue import (
+    start_worker,
+    process_jobs,
+    # Also export these for any code that might import them directly
     job_queue,
     set_job_result,
     set_job_status,

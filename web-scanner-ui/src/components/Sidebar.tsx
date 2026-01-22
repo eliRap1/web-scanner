@@ -1,6 +1,9 @@
 import { API_BASE } from "../api/client"
+import { useLocation } from "react-router-dom"
 
 export default function Sidebar() {
+  const location = useLocation()
+
   async function logout() {
     const token = localStorage.getItem("token")
 
@@ -18,12 +21,30 @@ export default function Sidebar() {
     window.location.href = "/login"
   }
 
+  const isActive = (path: string) => location.pathname === path
+
   return (
     <div className="sidebar">
       <h2>Web Scanner</h2>
-      <a href="/">Dashboard</a>
-	  <a href="/scan">New Scan</a>
-      <button onClick={logout}>Logout</button>
+      
+      <nav>
+        <a href="/" className={isActive("/") ? "active" : ""}>
+          📊 Dashboard
+        </a>
+        <a href="/scan" className={isActive("/scan") ? "active" : ""}>
+          🔍 New Scan
+        </a>
+        <a href="/reports" className={isActive("/reports") ? "active" : ""}>
+          📄 Reports
+        </a>
+        <a href="/settings" className={isActive("/settings") ? "active" : ""}>
+          ⚙️ Settings
+        </a>
+      </nav>
+      
+      <button className="logout" onClick={logout}>
+        🚪 Logout
+      </button>
     </div>
   )
 }

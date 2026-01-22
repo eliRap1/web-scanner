@@ -1,43 +1,118 @@
+"""
+scanner/engine.py
+
+Core Web Scanner - Crawls website and runs vulnerability tests.
+Improved version with:
+- URL parameter extraction from links
+- Proper session management for vulnerability testing
+- Progress callbacks during vuln testing
+- Better error handling
+"""
+
 from collections import deque
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode
+import requests
 from playwright.sync_api import sync_playwright
+
 from scanner.models import ScanTarget
 from scanner.extractor import extract_links, extract_forms
 from scanner.scope import is_in_scope, normalize_url
-import copy
 from scanner.vulnerability_tester import VulnerabilityTester
-
 from db.database import get_connection, insert_log
 
+
 class WebScanner:
-    def __init__(self, url: str, max_pages: int = 100, cookies=None, job_id: str = None, db_scan_id: int = None, callback=None):
+    def __init__(
+        self, 
+        url: str, 
+        max_pages: int = 100, 
+        cookies=None, 
+        job_id: str = None, 
+        db_scan_id: int = None, 
+        callback=None
+    ):
         self.start_url = normalize_url(url)
         self.max_pages = max_pages
         self.visited = set()
         self.queue = deque([self.start_url])
         self.targets: list[ScanTarget] = []
         self.seen_targets = set()
-        self.cookies = cookies
+        self.cookies = cookies or {}
         self.job_id = job_id
         self.db_scan_id = db_scan_id
         self.callback = callback
+        
+        # Create requests session for vulnerability testing
+        self.http_session = requests.Session()
+        self.http_session.headers.update({
+            'User-Agent': 'WebScanner/1.0 (Security Testing)',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        })
 
-    def scan(self) -> list[ScanTarget]:
-        # 1. Open Database Connection
+    def _extract_url_params(self, url: str) -> ScanTarget | None:
+        """Extract parameters from URL query string and create a ScanTarget."""
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        
+        if not params:
+            return None
+            
+        param_names = list(params.keys())
+        
+        # Create signature to avoid duplicates
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        sig = f"GET|{base_url}|{','.join(sorted(param_names))}"
+        
+        if sig in self.seen_targets:
+            return None
+            
+        self.seen_targets.add(sig)
+        
+        return ScanTarget(
+            url=base_url,
+            method="GET",
+            parameters=param_names,
+            context="url"
+        )
+
+    def _update_progress(self, phase: str, **kwargs):
+        """Send progress update via callback."""
+        if self.callback:
+            data = {
+                "phase": phase,
+                "visited_count": len(self.visited),
+                "found_count": len(self.targets),
+                "status": "running",
+                **kwargs
+            }
+            self.callback(self.job_id, data)
+
+    def scan(self) -> dict:
+        """
+        Main scan method.
+        
+        Returns:
+            dict with 'targets' and 'findings' lists
+        """
         conn = get_connection()
+        findings = []
         
         try:
-            # 2. Log Scan Start
             insert_log(conn, self.db_scan_id, "info", f"Scan started for {self.start_url}")
 
+            # ============================================
+            # PHASE 1: CRAWLING
+            # ============================================
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 
                 target_domain = urlparse(self.start_url).netloc
                 
+                # Inject cookies into Playwright
                 if self.cookies:
-                    print(f"[*] Injecting cookies for domain: {target_domain}")
+                    insert_log(conn, self.db_scan_id, "info", f"Injecting {len(self.cookies)} cookies")
                     for name, value in self.cookies.items():
                         context.add_cookies([{
                             "name": name, 
@@ -45,6 +120,8 @@ class WebScanner:
                             "domain": target_domain,
                             "path": "/"
                         }])
+                        # Also add to requests session
+                        self.http_session.cookies.set(name, value, domain=target_domain)
                 
                 page = context.new_page()
 
@@ -56,62 +133,41 @@ class WebScanner:
                         continue
 
                     try:
-                        # 3. Log / Callback: Update Progress (URL)
+                        # Progress update
+                        self._update_progress(
+                            phase="crawling",
+                            current_url=url
+                        )
+                        
                         if self.db_scan_id:
                             insert_log(conn, self.db_scan_id, "info", f"Visiting: {url}")
-                        if self.callback:
-                            self.callback(self.job_id, {
-                                "current_url": url,
-                                "visited_count": len(self.visited),
-                                "found_count": len(self.targets),
-                                "status": "running"
-                            })
 
-                        response = page.goto(url, timeout=10000, wait_until="networkidle")
+                        response = page.goto(url, timeout=15000, wait_until="networkidle")
+                        
+                        if not response:
+                            continue
+
                     except Exception as e:
-                        # 4. Log Error Loading Page (✅ FIXED: Use 'e' not 'scan_error')
-                        if self.db_scan_id:
-                            insert_log(conn, self.db_scan_id, "error", f"Failed to load {url}: {str(e)}")
-                        print(f"[-] Error loading {url}: {e}")
+                        insert_log(conn, self.db_scan_id, "warning", f"Failed to load {url}: {str(e)[:100]}")
+                        self.visited.add(url)
                         continue
-                    
-                    # --- Heuristic Logic (Pagination) ---
-                    if "?page=" in url:
-                        try:
-                            parts = url.split("?page=")
-                            if len(parts) == 2:
-                                base_part, page_part = parts
-                                if page_part.isdigit():
-                                    current_page = int(page_part)
-                                    for next_page_num in range(current_page + 1, current_page + 4):
-                                        next_url = f"{base_part}?page={next_page_num}"
-                                        
-                                        if is_in_scope(self.start_url, next_url) and next_url not in self.visited:
-                                            print(f"[*] Heuristic: Auto-discovered next page {next_page_num}")
-                                            self.queue.append(next_url)
-                        except Exception as heur_e:
-                            pass
 
-                    # --- Main Extraction Logic ---
-                    parsed = urlparse(url)
-                    
-                    # 1. URL Parameters
-                    if parsed.query:
-                        params = [p.split("=")[0] for p in parsed.query.split("&") if p]
-                        sig = f"GET|{url}|{','.join(sorted(params))}"
-                        if sig not in self.seen_targets:
-                            new_target = ScanTarget(url=url, method="GET", parameters=params, context="url")
-                            self.targets.append(new_target)
-                            self.seen_targets.add(sig)
-                            
-                            # CALLBACK: Send new target immediately
-                            if self.callback:
-                                self.callback(self.job_id, {"new_target": new_target})
+                    # -------------------------
+                    # 1. Extract URL Parameters
+                    # -------------------------
+                    url_target = self._extract_url_params(url)
+                    if url_target:
+                        self.targets.append(url_target)
+                        if self.callback:
+                            self.callback(self.job_id, {"new_target": url_target})
 
-                    # 2. Forms
+                    # -------------------------
+                    # 2. Extract Forms
+                    # -------------------------
                     for form in extract_forms(page, url):
                         param_names = [f.name for f in form.fields]
-                        if not param_names: continue 
+                        if not param_names:
+                            continue 
 
                         sig = f"{form.method.upper()}|{form.action}|{','.join(sorted(param_names))}"
                         if sig not in self.seen_targets:
@@ -124,42 +180,104 @@ class WebScanner:
                             self.targets.append(new_target)
                             self.seen_targets.add(sig)
                             
-                            # CALLBACK: Send new target immediately
                             if self.callback:
                                 self.callback(self.job_id, {"new_target": new_target})
 
-                    # 3. Links
+                    # -------------------------
+                    # 3. Extract Links for Queue
+                    # -------------------------
                     for link in extract_links(page, url):
-                        if is_in_scope(self.start_url, link):
+                        if is_in_scope(self.start_url, link) and link not in self.visited:
+                            # Also check for URL params in discovered links
+                            link_target = self._extract_url_params(link)
+                            if link_target:
+                                self.targets.append(link_target)
+                                if self.callback:
+                                    self.callback(self.job_id, {"new_target": link_target})
+                            
                             self.queue.append(link)
                     
                     self.visited.add(url)
 
-            # 5. Log Scan Completed (Success)
-            insert_log(conn, self.db_scan_id, "info", f"Scan completed. Visited: {len(self.visited)}, Found: {len(self.targets)}")
-            tester = VulnerabilityTester(
-                session=self.session,          # authenticated browser/session
-                db_scan_id=self.db_scan_id
+                # Close browser
+                browser.close()
+
+            insert_log(
+                conn, self.db_scan_id, "info", 
+                f"Crawling completed. Visited: {len(self.visited)}, Targets found: {len(self.targets)}"
             )
 
-            findings = []
+            # ============================================
+            # PHASE 2: VULNERABILITY TESTING
+            # ============================================
+            if self.targets:
+                self._update_progress(
+                    phase="testing",
+                    current_url="Starting vulnerability tests...",
+                    total_targets=len(self.targets)
+                )
+                
+                insert_log(conn, self.db_scan_id, "info", f"Starting vulnerability testing on {len(self.targets)} targets")
 
-            for target in self.targets:
-                vulns = tester.test_target(target)
-                findings.extend(vulns)
+                tester = VulnerabilityTester(
+                    session=self.http_session,
+                    db_scan_id=self.db_scan_id,
+                    callback=self.callback,
+                    job_id=self.job_id
+                )
 
-            # 3. Return FULL scan result
+                for idx, target in enumerate(self.targets):
+                    self._update_progress(
+                        phase="testing",
+                        current_url=target.url,
+                        testing_target=idx + 1,
+                        total_targets=len(self.targets)
+                    )
+                    
+                    try:
+                        vulns = tester.test_target(target)
+                        findings.extend(vulns)
+                    except Exception as e:
+                        insert_log(
+                            conn, self.db_scan_id, "warning", 
+                            f"Error testing {target.url}: {str(e)[:100]}"
+                        )
+
+                insert_log(
+                    conn, self.db_scan_id, "info", 
+                    f"Vulnerability testing completed. Found {len(findings)} potential vulnerabilities"
+                )
+
+            # ============================================
+            # PHASE 3: COMPLETE
+            # ============================================
+            insert_log(
+                conn, self.db_scan_id, "info", 
+                f"Scan completed. Visited: {len(self.visited)}, Targets: {len(self.targets)}, Findings: {len(findings)}"
+            )
+            
             return {
-                "targets": self.targets,
-                "findings": findings
+                "targets": [self._target_to_dict(t) for t in self.targets],
+                "findings": findings,
+                "stats": {
+                    "pages_visited": len(self.visited),
+                    "targets_found": len(self.targets),
+                    "vulnerabilities_found": len(findings)
+                }
             }
-            return self.targets
 
-        except Exception as scan_error:  # ✅ NOW scan_error is defined!
-            # 6. Log Fatal Scan Error
+        except Exception as scan_error:
             insert_log(conn, self.db_scan_id, "error", f"Fatal scan error: {str(scan_error)}")
             raise scan_error
             
         finally:
-            # 7. Close Database Connection
             conn.close()
+
+    def _target_to_dict(self, target: ScanTarget) -> dict:
+        """Convert ScanTarget dataclass to dict for JSON serialization."""
+        return {
+            "url": target.url,
+            "method": target.method,
+            "parameters": target.parameters,
+            "context": target.context
+        }

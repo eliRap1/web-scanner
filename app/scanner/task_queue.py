@@ -1,3 +1,11 @@
+"""
+scanner/task_queue.py
+
+Centralized job queue management with worker logic.
+This is the SINGLE SOURCE OF TRUTH for process_jobs() and start_worker().
+The worker.py file re-exports from here for backward compatibility.
+"""
+
 import queue
 import uuid
 import threading
@@ -30,8 +38,8 @@ job_attempts = {}
 MAX_RETRIES = 2
 
 # Feature 4.7: resilience configuration
-JOB_TIMEOUT_SECONDS = 120          # hard timeout for a scan attempt
-WATCHDOG_INTERVAL_SECONDS = 5      # how often to check running jobs
+JOB_TIMEOUT_SECONDS = 600          # 10 minutes - vulnerability testing can take a while
+WATCHDOG_INTERVAL_SECONDS = 10     # how often to check running jobs
 
 # Global Map to link UUID -> Integer Database ID
 uuid_to_db_id = {}
@@ -213,6 +221,7 @@ def set_job_result(job_uuid: str, result):
         job_status[job_uuid] = "completed"
         if job_uuid in job_progress:
             job_progress[job_uuid]["status"] = "completed"
+            job_progress[job_uuid]["result"] = result  # Include result in progress for frontend
             now = time.time()
             job_progress[job_uuid]["end_time"] = now
             st = job_progress[job_uuid].get("start_time")
@@ -317,7 +326,7 @@ def set_job_failure(job_uuid: str, error_message: str):
             conn.close()
 
 
-# --- Worker Logic ---
+# --- Worker Logic (SINGLE DEFINITION - NO DUPLICATES) ---
 
 def process_jobs():
     """
@@ -344,7 +353,7 @@ def process_jobs():
             def update_progress(uuid_, data):
                 set_job_progress(uuid_, data)
 
-            # Build scanner
+            # Build scanner (import here to avoid circular imports)
             from scanner.engine import WebScanner
             scanner = WebScanner(
                 url=job["url"],
@@ -393,6 +402,8 @@ def start_worker():
     """
     t = threading.Thread(target=process_jobs, daemon=True)
     t.start()
+    logger.info("Worker thread started.")
 
     w = threading.Thread(target=watchdog_loop, daemon=True)
     w.start()
+    logger.info("Watchdog thread started.")

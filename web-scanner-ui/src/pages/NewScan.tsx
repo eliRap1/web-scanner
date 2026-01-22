@@ -1,7 +1,35 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { API_BASE } from "../api/client"
 
-// Mock API for demonstration
-const API_BASE = "http://localhost:8000"
+interface ScanTarget {
+  url: string
+  method: string
+  parameters: string[]
+  context: string
+}
+
+interface Finding {
+  type: string
+  name?: string
+  url: string
+  method?: string
+  param: string
+  payload: string
+  severity: string
+  confidence?: number
+  evidence?: string
+}
+
+interface ProgressData {
+  phase?: string
+  current_url?: string
+  visited_count?: number
+  found_count?: number
+  testing_target?: number
+  total_targets?: number
+  status?: string
+  findings_count?: number
+}
 
 export default function NewScan() {
   const [url, setUrl] = useState("")
@@ -9,471 +37,383 @@ export default function NewScan() {
   const [targetLoginUrl, setTargetLoginUrl] = useState("")
   const [targetUsername, setTargetUsername] = useState("")
   const [targetPassword, setTargetPassword] = useState("")
-  const [loading, setLoading] = useState(false)
+
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [progress, setProgress] = useState<ProgressData | null>(null)
   const [result, setResult] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [jobId, setJobId] = useState("")
-  const [statusMessage, setStatusMessage] = useState("")
-  const [progress, setProgress] = useState<any>(null)
-  const [logs, setLogs] = useState<any[]>([])
+  
   const [showLogs, setShowLogs] = useState(false)
+  const [logs, setLogs] = useState<any[]>([])
+  
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   async function startScan() {
     if (!url) {
-      setError("Please enter a URL")
+      setError("Please enter a URL to scan")
       return
     }
-
-    setLoading(true)
+    
     setError("")
+    setLoading(true)
     setResult(null)
-    setStatusMessage("Initializing scan...")
+    setProgress(null)
     setLogs([])
-    setShowLogs(false)
 
     try {
       const token = localStorage.getItem("token")
       const params = new URLSearchParams({
-        url: url,
-        max_pages: maxPages.toString(),
+        url,
+        max_pages: String(maxPages),
         target_login_url: targetLoginUrl,
         target_username: targetUsername,
         target_password: targetPassword
       })
 
-      const res = await fetch(`${API_BASE}/scan?${params}`, {
+      const res = await fetch(`${API_BASE}/scan/?${params}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || "Scan failed")
-      }
-
       const data = await res.json()
-      setJobId(data.job_id)
-      setStatusMessage(data.message || "Scan started")
 
-      pollForResult(data.job_id)
-    } catch (e: any) {
-      setError(e.message)
+      if (data.job_id) {
+        setJobId(data.job_id)
+        pollForResult(data.job_id)
+      } else {
+        setError(data.detail || "Failed to start scan")
+        setLoading(false)
+      }
+    } catch (err) {
+      setError("Network error")
       setLoading(false)
     }
   }
 
   function pollForResult(id: string) {
     const token = localStorage.getItem("token")
-
-    const interval = setInterval(async () => {
+    
+    intervalRef.current = setInterval(async () => {
       try {
-        // ✅ FIX: Declare 'p' in outer scope
-        let p: any = null
-
-        // 1. Check Progress
-        const progressRes = await fetch(`${API_BASE}/scan/${id}/progress`, {
+        const res = await fetch(`${API_BASE}/scan/${id}/progress`, {
           headers: { Authorization: `Bearer ${token}` }
         })
+        const p = await res.json()
+        setProgress(p)
 
-        if (progressRes.ok) {
-          p = await progressRes.json()
-          setProgress(p)
-          setStatusMessage(`Scanning ${p.visited_count}/${maxPages}`)
-        }
-
-        // 2. ✅ NOW CHECK IF COMPLETED (p is defined!)
         if (p && p.status === "completed") {
-          clearInterval(interval)
-          await fetchFinalResults(id)
-          return // Exit early
+          clearInterval(intervalRef.current!)
+          intervalRef.current = null
+          setResult(p.result || p)
+          setLoading(false)
         }
 
-        // 3. Fetch logs only if user toggled view
-        if (showLogs) {
-          const logsRes = await fetch(`${API_BASE}/scan/${id}/logs`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          if (logsRes.ok) {
-            const logData = await logsRes.json()
-            setLogs(logData)
-          }
+        if (p && p.status === "failed") {
+          clearInterval(intervalRef.current!)
+          intervalRef.current = null
+          setResult({ error: p.last_error || "Scan failed" })
+          setLoading(false)
         }
-
-      } catch (e) {
-        console.error("Polling error:", e)
+      } catch (err) {
+        console.error("Polling error:", err)
       }
-    }, 3000)
+    }, 2000)
   }
 
-  async function fetchFinalResults(id: string) {
-    const token = localStorage.getItem("token")
-    const res = await fetch(`${API_BASE}/scan/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
-    setResult(data)
-    setLoading(false)
-    setStatusMessage("Completed")
-    setJobId("")
-    setProgress(null)
-    setShowLogs(false)
-  }
-
-  async function fetchLogs(jobId: string) {
+  async function fetchLogs(id: string) {
     const token = localStorage.getItem("token")
     try {
-      const res = await fetch(`${API_BASE}/scan/${jobId}/logs`, {
+      const res = await fetch(`${API_BASE}/scan/${id}/logs`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      if (res.ok) {
-        const data = await res.json()
-        setLogs(data)
-      } else {
-        alert("Failed to load logs")
-      }
-    } catch (e) {
-      console.error("Error loading logs:", e)
+      const data = await res.json()
+      setLogs(data || [])
+    } catch (err) {
+      console.error("Failed to fetch logs:", err)
     }
   }
 
-  return (
-    <div style={{ padding: "20px", fontFamily: "system-ui, sans-serif" }}>
-      <h1>New Scan</h1>
+  function cancelScan() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    setLoading(false)
+    setProgress(null)
+    setJobId(null)
+  }
 
-      <div style={{ maxWidth: 520, padding: "20px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "20px" }}>
-        <div style={{ marginBottom: "15px" }}>
-          <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Target URL</label>
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [])
+
+  const getProgressPercent = () => {
+    if (!progress) return 0
+    if (progress.phase === "crawling") {
+      return Math.min((progress.visited_count || 0) / maxPages * 50, 50)
+    }
+    if (progress.phase === "testing" && progress.total_targets) {
+      return 50 + ((progress.testing_target || 0) / progress.total_targets * 50)
+    }
+    if (progress.status === "completed") return 100
+    return 0
+  }
+
+  return (
+    <div className="scan-container">
+      <h1 className="page-title">🔍 New Security Scan</h1>
+
+      {/* Main Scan Config */}
+      <div className="scan-section">
+        <h3>🎯 Target Configuration</h3>
+        
+        <div className="form-group">
+          <label>Target URL</label>
           <input
+            type="url"
+            className="form-input"
             placeholder="https://example.com"
             value={url}
             onChange={e => setUrl(e.target.value)}
-            style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ccc" }}
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
-          <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>Max Pages</label>
+        <div className="form-group">
+          <label>Max Pages to Crawl</label>
           <input
             type="number"
+            className="form-input"
             min={1}
-            max={100}
+            max={500}
             value={maxPages}
             onChange={e => setMaxPages(Number(e.target.value))}
-            style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ccc" }}
           />
         </div>
 
         <button 
-          onClick={startScan} 
-          disabled={loading} 
-          style={{ 
-            width: "100%", 
-            padding: "10px", 
-            background: loading ? "#ccc" : "#007bff", 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: loading ? "not-allowed" : "pointer",
-            fontWeight: "bold"
-          }}
+          className="btn btn-primary" 
+          onClick={startScan}
+          disabled={loading || !url}
+          style={{ width: "100%" }}
         >
-          {loading ? "Scanning..." : "Start Scan"}
+          {loading ? "⏳ Scanning..." : "🚀 Start Scan"}
         </button>
       </div>
 
-      <div style={{ maxWidth: 520, padding: "20px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "20px" }}>
-        <h3 style={{ marginTop: 0 }}>Target Login (Optional)</h3>
+      {/* Optional: Target Login */}
+      <div className="scan-section">
+        <h3>🔐 Target Authentication <span className="optional">(Optional)</span></h3>
+        <p className="text-muted mb-2" style={{ fontSize: "0.9rem" }}>
+          If the target requires login, provide credentials to scan authenticated areas.
+        </p>
 
-        <input
-          placeholder="Login URL"
-          value={targetLoginUrl}
-          onChange={e => setTargetLoginUrl(e.target.value)}
-          style={{ width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "4px", border: "1px solid #ccc" }}
-        />
+        <div className="form-group">
+          <label>Login Page URL</label>
+          <input
+            className="form-input"
+            placeholder="https://example.com/login"
+            value={targetLoginUrl}
+            onChange={e => setTargetLoginUrl(e.target.value)}
+          />
+        </div>
 
-        <input
-          placeholder="Username"
-          value={targetUsername}
-          onChange={e => setTargetUsername(e.target.value)}
-          style={{ width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "4px", border: "1px solid #ccc" }}
-        />
-
-        <input
-          type="password"
-          placeholder="Password"
-          value={targetPassword}
-          onChange={e => setTargetPassword(e.target.value)}
-          style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ccc" }}
-        />
-      </div>
-
-      {error && <p style={{ color: "red", fontWeight: "bold" }}>{error}</p>}
-
-      {jobId && (
-        <div style={{ marginTop: "20px", padding: "15px", background: "#f8f9fa", borderRadius: "8px", border: "1px solid #dee2e6" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <strong>Status:</strong> {statusMessage}
-
-            {progress && !result && (
-              <button 
-                onClick={() => {
-                  setShowLogs(!showLogs)
-                  if (!showLogs && jobId) {
-                    fetchLogs(jobId)
-                  }
-                }}
-                style={{ padding: "5px 10px", background: "#6c757d", color: "white", border: "none", borderRadius: "3px", cursor: "pointer", fontSize: "12px" }}
-              >
-                {showLogs ? "Hide Logs" : "View Logs"}
-              </button>
-            )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          <div className="form-group">
+            <label>Username</label>
+            <input
+              className="form-input"
+              placeholder="username"
+              value={targetUsername}
+              onChange={e => setTargetUsername(e.target.value)}
+            />
           </div>
 
-          {progress && (
-            <div style={{ marginTop: "15px", borderTop: "1px solid #ddd", paddingTop: "15px" }}>
-              <p style={{ margin: "5px 0", fontSize: "12px", color: "#666" }}>Job ID: {jobId}</p>
-              <p><strong>Current URL:</strong> <span style={{ fontFamily: "monospace", background: "#fff", padding: "2px 6px", borderRadius: "3px" }}>{progress.current_url}</span></p>
-              <p><strong>Visited:</strong> {progress.visited_count}</p>
-              <p><strong>Targets Found:</strong> {progress.found_count}</p>
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="••••••••"
+              value={targetPassword}
+              onChange={e => setTargetPassword(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-              <div style={{ background: "#ddd", height: "10px", borderRadius: "5px", overflow: "hidden" }}>
-                <div
-                  style={{
-                    width: `${Math.min((progress.visited_count / maxPages) * 100, 100)}%`,
-                    background: "#007bff",
-                    height: "100%",
-                    transition: "width 0.3s ease"
-                  }}
-                />
-              </div>
-            </div>
-          )}
+      {/* Error Display */}
+      {error && (
+        <div className="error" style={{ marginBottom: "20px" }}>
+          ❌ {error}
         </div>
       )}
 
+      {/* Progress Section */}
+      {jobId && loading && (
+        <div className="progress-section">
+          <div className="progress-header">
+            <div className="progress-status">
+              <span className={`status-badge ${progress?.status || 'running'}`}>
+                {progress?.phase === "crawling" ? "🕷️ Crawling" : 
+                 progress?.phase === "testing" ? "🔬 Testing" : 
+                 "⏳ Processing"}
+              </span>
+              {progress?.current_url && (
+                <span className="text-muted" style={{ fontSize: "0.85rem", maxWidth: "400px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {progress.current_url}
+                </span>
+              )}
+            </div>
+            <button className="btn btn-secondary" onClick={cancelScan} style={{ padding: "8px 16px" }}>
+              Cancel
+            </button>
+          </div>
+
+          <div className="progress-bar-container">
+            <div className="progress-bar" style={{ width: `${getProgressPercent()}%` }} />
+          </div>
+
+          <div className="progress-details">
+            <div className="progress-stat">
+              <div className="label">Pages Visited</div>
+              <div className="value">{progress?.visited_count || 0}</div>
+            </div>
+            <div className="progress-stat">
+              <div className="label">Targets Found</div>
+              <div className="value">{progress?.found_count || 0}</div>
+            </div>
+            {progress?.phase === "testing" && (
+              <div className="progress-stat">
+                <div className="label">Testing Progress</div>
+                <div className="value">{progress?.testing_target || 0}/{progress?.total_targets || 0}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Logs Toggle */}
+          <div style={{ marginTop: "20px" }}>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => {
+                setShowLogs(!showLogs)
+                if (!showLogs && jobId) fetchLogs(jobId)
+              }}
+              style={{ padding: "8px 16px", fontSize: "0.875rem" }}
+            >
+              {showLogs ? "Hide Logs" : "Show Logs"}
+            </button>
+
+            {showLogs && (
+              <div className="logs-container mt-2">
+                {logs.length === 0 ? (
+                  <div className="log-entry info">No logs yet...</div>
+                ) : (
+                  logs.map((log, i) => (
+                    <div key={i} className={`log-entry ${log.level}`}>
+                      <span className="log-time">{new Date(log.created_at).toLocaleTimeString()}</span>
+                      <span>{log.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Results Section */}
       {result && (
-        <div style={{ marginTop: "30px" }}>
-          <h2 style={{ borderBottom: "2px solid #007bff", paddingBottom: "10px", color: "#007bff", marginBottom: "20px" }}>
-            🎯 Scan Results
-          </h2>
-          
-          {/* Check if it's an error response */}
+        <div className="results-section">
+          <div className="results-header">
+            <h3>
+              {result.error ? "❌ Scan Failed" : "✅ Scan Complete"}
+            </h3>
+            {result.stats && (
+              <div style={{ display: "flex", gap: "20px", fontSize: "0.9rem" }}>
+                <span>📄 {result.stats.pages_visited} pages</span>
+                <span>🎯 {result.stats.targets_found} targets</span>
+                <span className={result.stats.vulnerabilities_found > 0 ? "text-danger" : "text-success"}>
+                  🐛 {result.stats.vulnerabilities_found} vulnerabilities
+                </span>
+              </div>
+            )}
+          </div>
+
           {result.error ? (
-            <div style={{ 
-              background: "#fff3cd", 
-              border: "2px solid #ffc107", 
-              borderRadius: "8px", 
-              padding: "20px",
-              color: "#856404"
-            }}>
-              <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "24px" }}>⚠️</span>
-                Scan Failed
-              </h3>
-              <p style={{ margin: "10px 0", fontSize: "14px", lineHeight: "1.6" }}>
-                <strong>Error:</strong> {result.error}
-              </p>
+            <div style={{ padding: "24px", color: "var(--accent-danger)" }}>
+              {result.error}
             </div>
           ) : (
             <>
-              {/* Summary Card */}
-              <div style={{ 
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                borderRadius: "12px",
-                padding: "25px",
-                color: "white",
-                marginBottom: "25px",
-                boxShadow: "0 4px 15px rgba(0,0,0,0.1)"
-              }}>
-                <h3 style={{ margin: "0 0 15px 0", fontSize: "18px", display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span>📊</span> Summary
-                </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px" }}>
-                  <div>
-                    <div style={{ fontSize: "32px", fontWeight: "bold" }}>{result.length || 0}</div>
-                    <div style={{ fontSize: "14px", opacity: 0.9 }}>Total Targets Found</div>
+              {/* Vulnerabilities */}
+              {result.findings && result.findings.length > 0 && (
+                <div style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  <div style={{ padding: "16px 24px", background: "rgba(239, 68, 68, 0.1)", borderBottom: "1px solid var(--border-color)" }}>
+                    <strong style={{ color: "var(--accent-danger)" }}>
+                      ⚠️ {result.findings.length} Vulnerabilities Found
+                    </strong>
                   </div>
-                  <div>
-                    <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                      {result.filter((t: any) => t.context === "form").length}
-                    </div>
-                    <div style={{ fontSize: "14px", opacity: 0.9 }}>Forms Discovered</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                      {result.filter((t: any) => t.context === "url").length}
-                    </div>
-                    <div style={{ fontSize: "14px", opacity: 0.9 }}>URL Parameters</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Targets List */}
-              <div style={{ 
-                background: "white",
-                borderRadius: "12px",
-                border: "1px solid #e1e8ed",
-                overflow: "hidden",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
-              }}>
-                <div style={{ 
-                  padding: "20px", 
-                  background: "#f8f9fa", 
-                  borderBottom: "1px solid #e1e8ed",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center"
-                }}>
-                  <h3 style={{ margin: 0, fontSize: "16px", color: "#333" }}>
-                    🎯 Attack Surface Details
-                  </h3>
-                  <span style={{ 
-                    fontSize: "12px", 
-                    color: "#666",
-                    background: "white",
-                    padding: "4px 12px",
-                    borderRadius: "20px",
-                    border: "1px solid #ddd"
-                  }}>
-                    {result.length} items
-                  </span>
-                </div>
-
-                <div style={{ maxHeight: "600px", overflowY: "auto" }}>
-                  {result.map((target: any, index: number) => (
-                    <div 
-                      key={index}
-                      style={{ 
-                        padding: "20px",
-                        borderBottom: index < result.length - 1 ? "1px solid #f0f0f0" : "none",
-                        transition: "background 0.2s",
-                        cursor: "pointer",
-                        background: index % 2 === 0 ? "#fafbfc" : "white"
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "#f0f7ff"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? "#fafbfc" : "white"}
-                    >
-                      {/* Header Row */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                          <span style={{ 
-                            background: target.method === "GET" ? "#28a745" : target.method === "POST" ? "#007bff" : "#6c757d",
-                            color: "white",
-                            padding: "4px 10px",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            fontFamily: "monospace"
-                          }}>
-                            {target.method}
-                          </span>
-                          <span style={{ 
-                            background: target.context === "form" ? "#ffc107" : "#17a2b8",
-                            color: target.context === "form" ? "#333" : "white",
-                            padding: "4px 10px",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            fontWeight: "bold"
-                          }}>
-                            {target.context === "form" ? "📝 FORM" : "🔗 URL"}
-                          </span>
-                        </div>
-                        <span style={{ fontSize: "12px", color: "#999" }}>#{index + 1}</span>
+                  {result.findings.map((finding: Finding, i: number) => (
+                    <div key={i} className="finding-item">
+                      <div className="finding-header">
+                        <span className="finding-type">{finding.type} - {finding.name || finding.param}</span>
+                        <span className={`severity-badge ${finding.severity.toLowerCase()}`}>
+                          {finding.severity}
+                        </span>
                       </div>
-
-                      {/* URL */}
-                      <div style={{ marginBottom: "12px" }}>
-                        <div style={{ fontSize: "11px", color: "#666", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                          Target URL
-                        </div>
-                        <a 
-                          href={target.url} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          style={{ 
-                            color: "#007bff",
-                            textDecoration: "none",
-                            fontSize: "13px",
-                            fontFamily: "monospace",
-                            wordBreak: "break-all",
-                            display: "block",
-                            padding: "8px 12px",
-                            background: "#f8f9fa",
-                            borderRadius: "4px",
-                            border: "1px solid #e1e8ed"
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "#e7f3ff"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "#f8f9fa"}
-                        >
-                          {target.url}
-                        </a>
-                      </div>
-
-                      {/* Parameters */}
-                      <div>
-                        <div style={{ fontSize: "11px", color: "#666", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                          Parameters ({target.parameters.length})
-                        </div>
-                        {target.parameters.length > 0 ? (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                            {target.parameters.map((param: string, i: number) => (
-                              <span 
-                                key={i}
-                                style={{ 
-                                  background: "#e7f3ff",
-                                  color: "#0066cc",
-                                  padding: "4px 10px",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  fontFamily: "monospace",
-                                  border: "1px solid #cce5ff"
-                                }}
-                              >
-                                {param}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: "13px", color: "#999", fontStyle: "italic" }}>
-                            No parameters
-                          </span>
+                      <div className="finding-details">
+                        <div><strong>URL:</strong> <code>{finding.url}</code></div>
+                        <div><strong>Parameter:</strong> <code>{finding.param}</code></div>
+                        <div><strong>Payload:</strong> <code>{finding.payload}</code></div>
+                        {finding.evidence && (
+                          <div><strong>Evidence:</strong> {finding.evidence}</div>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
 
-              {/* Raw JSON Toggle */}
-              <details style={{ marginTop: "20px" }}>
-                <summary style={{ 
-                  cursor: "pointer", 
-                  padding: "12px 16px",
-                  background: "#f8f9fa",
-                  borderRadius: "6px",
-                  border: "1px solid #dee2e6",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "#495057",
-                  userSelect: "none"
-                }}>
-                  🔍 View Raw JSON Data
-                </summary>
-                <pre style={{ 
-                  marginTop: "10px",
-                  overflowX: "auto", 
-                  background: "#2d2d2d", 
-                  color: "#f8f8f2",
-                  padding: "20px", 
-                  borderRadius: "8px", 
-                  fontSize: "13px", 
-                  fontFamily: "monospace",
-                  lineHeight: "1.6",
-                  border: "1px solid #444"
-                }}>
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              </details>
+              {/* Targets */}
+              {result.targets && result.targets.length > 0 && (
+                <div>
+                  <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)" }}>
+                    <strong>📋 Discovered Targets ({result.targets.length})</strong>
+                  </div>
+                  {result.targets.map((target: ScanTarget, i: number) => (
+                    <div key={i} className="target-item">
+                      <div className="target-header">
+                        <span className={`method-badge ${target.method.toLowerCase()}`}>
+                          {target.method}
+                        </span>
+                        <span className={`context-badge ${target.context}`}>
+                          {target.context === "form" ? "📝 Form" : "🔗 URL"}
+                        </span>
+                        <span className="text-muted" style={{ marginLeft: "auto", fontSize: "0.85rem" }}>
+                          #{i + 1}
+                        </span>
+                      </div>
+                      <div className="target-url">{target.url}</div>
+                      <div className="target-params">
+                        {target.parameters.map((param, j) => (
+                          <span key={j} className="param-tag">{param}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(!result.targets || result.targets.length === 0) && (!result.findings || result.findings.length === 0) && (
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                  No targets or vulnerabilities found. The site may be well-protected or the crawl was limited.
+                </div>
+              )}
             </>
           )}
         </div>
