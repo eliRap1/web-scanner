@@ -123,3 +123,19 @@ def _authorize_job_access(job_id: str, request: Request) -> int:
         conn.close()
 
     return db_scan_id
+
+@router.get("/{job_id}/vulnerabilities")
+def get_scan_vulnerabilities(job_id: str, request: Request):
+    """Get all vulnerabilities found during a scan."""
+    db_scan_id = _authorize_job_access(job_id, request)
+    conn = db.get_connection()
+    try:
+        vulns = db.get_vulnerabilities_for_scan(
+            conn, 
+            db_scan_id, 
+            request.state.user["user_id"],
+            request.state.user["role"]
+        )
+        return {"vulnerabilities": vulns}
+    finally:
+        conn.close()

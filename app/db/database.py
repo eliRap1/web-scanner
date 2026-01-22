@@ -766,6 +766,58 @@ def get_scan_logs(conn, scan_id: int):
     ).fetchall()
     return [dict(r) for r in rows]
 
+def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity):
+    """Insert a vulnerability finding into database."""
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO Vulnerabilities (
+            scan_id, vuln_type, severity, 
+            payload_used, description, confirmed, evidence
+        )
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+    """, (
+        scan_id, 
+        vuln_type, 
+        severity, 
+        payload, 
+        f"Vulnerability found in parameter '{param}' at {url}",
+        f"Payload '{payload}' triggered vulnerability detection"
+    ))
+    conn.commit()
+
+def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
+    """Get all vulnerabilities for a specific scan."""
+    # Check access
+    scan = get_scan_by_id(conn, scan_id, user_id, user_role)
+    
+    c = conn.cursor()
+    rows = c.execute("""
+        SELECT * FROM Vulnerabilities 
+        WHERE scan_id = ? 
+        ORDER BY severity DESC, timestamp DESC
+    """, (scan_id,)).fetchall()
+    return rows
+
+def create_report(conn, scan_id):
+    """Create a report after scan completes."""
+    # Get vulnerability count
+    c = conn.cursor()
+    count_row = c.execute(
+        "SELECT COUNT(*) as count FROM Vulnerabilities WHERE scan_id = ?",
+        (scan_id,)
+    ).fetchone()
+    total_vulns = count_row["count"] if count_row else 0
+    
+    # Create report
+    summary = f"Scan completed with {total_vulns} vulnerabilities found"
+    
+    c.execute("""
+        INSERT INTO Reports (user_id, scan_id, summary, total_vulns)
+        SELECT user_id, ?, ?, ? FROM Scans WHERE scan_id = ?
+    """, (scan_id, summary, total_vulns, scan_id))
+    conn.commit()
+    return c.lastrowid
+# -------------------------------
 if __name__ == "__main__":
     print("="*60)
     print("INITIALIZING DATABASE")

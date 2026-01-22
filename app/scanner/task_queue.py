@@ -79,7 +79,7 @@ def watchdog_loop():
 
         for job_id in to_fail:
             set_job_failure(job_id, f"Timeout: scan exceeded {JOB_TIMEOUT_SECONDS} seconds")
-
+    
         time.sleep(WATCHDOG_INTERVAL_SECONDS)
 
 
@@ -204,8 +204,7 @@ def get_job_result(job_uuid: str):
 
 def set_job_result(job_uuid: str, result):
     """
-    Saves result, updates status, and marks 'end_time' in DB.
-    Feature 4.5: compute end_time + duration.
+    Saves result, updates status, marks end_time, and generates report.
     """
     db_scan_id = uuid_to_db_id.get(job_uuid)
 
@@ -214,7 +213,6 @@ def set_job_result(job_uuid: str, result):
         job_status[job_uuid] = "completed"
         if job_uuid in job_progress:
             job_progress[job_uuid]["status"] = "completed"
-
             now = time.time()
             job_progress[job_uuid]["end_time"] = now
             st = job_progress[job_uuid].get("start_time")
@@ -223,15 +221,20 @@ def set_job_result(job_uuid: str, result):
     if db_scan_id:
         conn = get_connection()
         try:
+            # Mark scan completed
             c = conn.cursor()
             c.execute(
                 "UPDATE Scans SET status = 'completed', end_time = CURRENT_TIMESTAMP WHERE scan_id = ?",
                 (db_scan_id,)
             )
             conn.commit()
-            logger.info(f"Job {job_uuid} marked completed in DB.")
+            
+            # Generate report!
+            from db.database import create_report
+            report_id = create_report(conn, db_scan_id)
+            logger.info(f"Job {job_uuid} completed. Report {report_id} generated.")
         except Exception as e:
-            logger.error(f"Failed to update DB completion for {job_uuid}: {e}")
+            logger.error(f"Failed to generate report for {job_uuid}: {e}")
             conn.rollback()
         finally:
             conn.close()

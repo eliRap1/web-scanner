@@ -5,6 +5,7 @@ from scanner.models import ScanTarget
 from scanner.extractor import extract_links, extract_forms
 from scanner.scope import is_in_scope, normalize_url
 import copy
+from scanner.vulnerability_tester import VulnerabilityTester
 
 from db.database import get_connection, insert_log
 
@@ -136,6 +137,22 @@ class WebScanner:
 
             # 5. Log Scan Completed (Success)
             insert_log(conn, self.db_scan_id, "info", f"Scan completed. Visited: {len(self.visited)}, Found: {len(self.targets)}")
+            tester = VulnerabilityTester(
+                session=self.session,          # authenticated browser/session
+                db_scan_id=self.db_scan_id
+            )
+
+            findings = []
+
+            for target in self.targets:
+                vulns = tester.test_target(target)
+                findings.extend(vulns)
+
+            # 3. Return FULL scan result
+            return {
+                "targets": self.targets,
+                "findings": findings
+            }
             return self.targets
 
         except Exception as scan_error:  # ✅ NOW scan_error is defined!
