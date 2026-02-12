@@ -91,7 +91,7 @@ def watchdog_loop():
         time.sleep(WATCHDOG_INTERVAL_SECONDS)
 
 
-def add_job(url: str, max_pages: int, cookies=None, user_id: int = None) -> str:
+def add_job(url: str, max_pages: int, cookies=None, user_id: int = None, proxy: str = None) -> str:
     """
     Adds a job to the queue AND creates a persistent record in the database.
     Feature 4.5: stores queued_at, and start_time/end_time are tracked properly.
@@ -121,6 +121,7 @@ def add_job(url: str, max_pages: int, cookies=None, user_id: int = None) -> str:
             "url": url,
             "max_pages": max_pages,
             "cookies": cookies,
+            "proxy": proxy,  # Proxy support for Burp/ZAP
             # Feature 4.5 timing
             "queued_at": queued_at,
             "start_time": None,
@@ -212,7 +213,7 @@ def get_job_result(job_uuid: str):
 
 def set_job_result(job_uuid: str, result):
     """
-    Saves result, updates status, marks end_time, and generates report.
+    Saves result, updates status, marks end_time, saves vulnerabilities, and generates report.
     """
     db_scan_id = uuid_to_db_id.get(job_uuid)
 
@@ -230,20 +231,54 @@ def set_job_result(job_uuid: str, result):
     if db_scan_id:
         conn = get_connection()
         try:
-            # Mark scan completed
+            # Save vulnerabilities to database first
+            findings = result.get("findings", []) if isinstance(result, dict) else []
+            findings_count = 0
+
+            if findings:
+                from db.database import insert_vulnerability
+                for finding in findings:
+                    try:
+                        # Handle both dict and object formats
+                        if isinstance(finding, dict):
+                            vuln_type = finding.get("type") or finding.get("vuln_type", "Unknown")
+                            url = finding.get("url", "")
+                            parameter = finding.get("parameter", "")
+                            payload = finding.get("payload", "")
+                            severity = finding.get("severity", "medium").lower()
+                            confidence = finding.get("confidence", 0.8)
+                        else:
+                            vuln_type = getattr(finding, "vuln_type", "Unknown")
+                            url = getattr(finding, "url", "")
+                            parameter = getattr(finding, "parameter", "")
+                            payload = getattr(finding, "payload", "")
+                            severity = getattr(finding, "severity", "medium").lower()
+                            confidence = getattr(finding, "confidence", 0.8)
+
+                        insert_vulnerability(
+                            conn, db_scan_id, url, parameter,
+                            vuln_type, payload, severity, confidence
+                        )
+                        findings_count += 1
+                    except Exception as ve:
+                        logger.warning(f"Failed to save vulnerability: {ve}")
+
+                logger.info(f"Saved {findings_count} vulnerabilities for scan {db_scan_id}")
+
+            # Mark scan completed with findings count
             c = conn.cursor()
             c.execute(
-                "UPDATE Scans SET status = 'completed', end_time = CURRENT_TIMESTAMP WHERE scan_id = ?",
-                (db_scan_id,)
+                "UPDATE Scans SET status = 'completed', end_time = CURRENT_TIMESTAMP, findings_count = ? WHERE scan_id = ?",
+                (findings_count, db_scan_id)
             )
             conn.commit()
-            
-            # Generate report!
+
+            # Generate report record
             from db.database import create_report
             report_id = create_report(conn, db_scan_id)
-            logger.info(f"Job {job_uuid} completed. Report {report_id} generated.")
+            logger.info(f"Job {job_uuid} completed. {findings_count} vulnerabilities saved. Report {report_id} generated.")
         except Exception as e:
-            logger.error(f"Failed to generate report for {job_uuid}: {e}")
+            logger.error(f"Failed to save results for {job_uuid}: {e}")
             conn.rollback()
         finally:
             conn.close()
@@ -359,6 +394,7 @@ def process_jobs():
                 url=job["url"],
                 max_pages=job["max_pages"],
                 cookies=job["cookies"],
+                proxy=job.get("proxy"),  # Proxy for Burp/ZAP integration
                 db_scan_id=db_scan_id,
                 job_id=job_uuid,
                 callback=update_progress

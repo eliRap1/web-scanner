@@ -179,6 +179,24 @@ def apply_migrations(conn):
         current_version = 3
         logger.info("[MIGRATION] Upgraded schema -> version 3")
 
+    # v4 - Add url and parameter columns to Vulnerabilities table
+    if current_version < 4:
+        try:
+            c.execute("ALTER TABLE Vulnerabilities ADD COLUMN url TEXT;")
+        except Exception:
+            pass  # Column may already exist
+        try:
+            c.execute("ALTER TABLE Vulnerabilities ADD COLUMN parameter TEXT;")
+        except Exception:
+            pass  # Column may already exist
+        try:
+            c.execute("ALTER TABLE Vulnerabilities ADD COLUMN confidence REAL DEFAULT 0.0;")
+        except Exception:
+            pass  # Column may already exist
+        c.execute("PRAGMA user_version = 4;")
+        current_version = 4
+        logger.info("[MIGRATION] Upgraded schema -> version 4 (added url, parameter, confidence to Vulnerabilities)")
+
     conn.commit()
     logger.info(f"[MIGRATION] Current schema version: {current_version}")
 
@@ -766,22 +784,26 @@ def get_scan_logs(conn, scan_id: int):
     ).fetchall()
     return [dict(r) for r in rows]
 
-def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity):
+def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity, confidence=0.8):
     """Insert a vulnerability finding into database."""
     c = conn.cursor()
     c.execute("""
         INSERT INTO Vulnerabilities (
-            scan_id, vuln_type, severity, 
-            payload_used, description, confirmed, evidence
+            scan_id, vuln_type, severity,
+            payload_used, description, confirmed, evidence,
+            url, parameter, confidence
         )
-        VALUES (?, ?, ?, ?, ?, 1, ?)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
     """, (
-        scan_id, 
-        vuln_type, 
-        severity, 
-        payload, 
+        scan_id,
+        vuln_type,
+        severity,
+        payload,
         f"Vulnerability found in parameter '{param}' at {url}",
-        f"Payload '{payload}' triggered vulnerability detection"
+        f"Payload '{payload}' triggered vulnerability detection",
+        url,
+        param,
+        confidence
     ))
     conn.commit()
 

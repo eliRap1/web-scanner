@@ -12,6 +12,14 @@ from .sqli import SQLI_PAYLOADS
 from .traversal import TRAVERSAL_PAYLOADS
 from .redirect import REDIRECT_PAYLOADS
 from .header_injection import HEADER_INJECTION_PAYLOADS
+from .nosql import NOSQL_PAYLOADS
+from .ssti import SSTI_PAYLOADS
+from .xxe import XXE_PAYLOADS
+from .command_injection import COMMAND_INJECTION_PAYLOADS
+from .ssrf import SSRF_PAYLOADS
+from .idor import get_all_idor_payloads
+from .auth_bypass import get_all_auth_bypass_payloads
+from .security_headers import get_all_security_header_checks
 
 
 # Master registry of all payload types
@@ -21,6 +29,18 @@ ALL_PAYLOADS = {
     "PathTraversal": TRAVERSAL_PAYLOADS,
     "OpenRedirect": REDIRECT_PAYLOADS,
     "HeaderInjection": HEADER_INJECTION_PAYLOADS,
+    "NoSQL": NOSQL_PAYLOADS,
+    "SSTI": SSTI_PAYLOADS,
+    "XXE": XXE_PAYLOADS,
+    "CommandInjection": COMMAND_INJECTION_PAYLOADS,
+    "SSRF": SSRF_PAYLOADS,
+}
+
+# Extended payloads (dict-based)
+EXTENDED_PAYLOADS = {
+    "IDOR": get_all_idor_payloads(),
+    "AuthBypass": get_all_auth_bypass_payloads(),
+    "SecurityHeaders": get_all_security_header_checks(),
 }
 
 # Severity ordering for reporting

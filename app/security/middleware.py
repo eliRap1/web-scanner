@@ -1,28 +1,81 @@
+"""
+Authentication Middleware Module
+
+This module provides request-level authentication for the FastAPI application.
+It intercepts all incoming requests and validates Bearer tokens against the
+Sessions table in the database.
+
+Public endpoints (login, register, docs) bypass authentication.
+All other endpoints require a valid, non-expired session token.
+
+Usage:
+    app.middleware("http")(auth_middleware)
+"""
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import db.database as database
-PUBLIC_PREFIXES = (
-    "/login",
-    "/register",
-    "/verify",
-    "/health",
-    "/docs",
-    "/openapi.json",
-)
-public_paths = [
-    "/login",
-    "/register",
-    "/verify",
-    "/health",
-    "/docs",
-    "/openapi.json",
-]
-async def auth_middleware(request: Request, call_next):
-    path = request.url.path
 
-    if path.startswith(PUBLIC_PREFIXES):
+# Endpoints that don't require authentication
+# Note: Some endpoints (like /logout) handle their own token validation
+PUBLIC_PATHS = {
+    "/",              # Root/health check
+    "/login",         # User login
+    "/logout",        # User logout (handles own token validation)
+    "/register",      # User registration
+    "/verify",        # Token verification
+    "/refresh",       # Token refresh (handles own token validation)
+    "/health",        # Health check
+    "/docs",          # Swagger UI
+    "/openapi.json",  # OpenAPI schema
+    "/redoc",         # ReDoc documentation
+    "/favicon.ico",   # Browser favicon request
+    "/meta.json",     # Frontend metadata file
+}
+
+# Prefixes for paths that don't require authentication
+# These endpoints handle their own token validation via query parameter
+PUBLIC_PREFIXES = (
+    "/docs",
+    "/openapi",
+    "/redoc",
+    "/reports/view",      # Report viewing (validates token from query param)
+    "/reports/download",  # Report download (validates token from query param)
+)
+
+
+async def auth_middleware(request: Request, call_next):
+    """
+    FastAPI middleware for authenticating requests.
+
+    This middleware:
+    1. Allows CORS preflight (OPTIONS) requests to pass through
+    2. Allows public paths without authentication
+    3. Validates Bearer token from Authorization header
+    4. Attaches user info to request.state.user for authenticated requests
+    5. Returns 401 Unauthorized for invalid/missing tokens
+
+    Args:
+        request: The incoming FastAPI Request object
+        call_next: The next middleware/route handler to call
+
+    Returns:
+        Response: Either the route response or a 401 JSON error
+    """
+    # Allow CORS preflight requests (OPTIONS) to pass through
+    # These are sent by browsers before the actual request
+    if request.method == "OPTIONS":
         return await call_next(request)
 
+    path = request.url.path
+
+    # Allow public paths without authentication
+    if path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
+        # Initialize user state as None for public paths
+        request.state.user = None
+        return await call_next(request)
+
+    # Check for Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return JSONResponse(
@@ -30,14 +83,23 @@ async def auth_middleware(request: Request, call_next):
             content={"detail": "Missing Authorization header"}
         )
 
+    # Validate Bearer token format
     if not auth_header.startswith("Bearer "):
         return JSONResponse(
             status_code=401,
-            content={"detail": "Invalid Authorization format"}
+            content={"detail": "Invalid Authorization format. Use: Bearer <token>"}
         )
 
+    # Extract and validate token
     token = auth_header[7:].strip()
 
+    if not token:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Empty token provided"}
+        )
+
+    # Validate token against database
     conn = database.get_connection()
     try:
         user = database.validate_session(conn, token)
@@ -46,7 +108,13 @@ async def auth_middleware(request: Request, call_next):
                 status_code=401,
                 content={"detail": "Invalid or expired token"}
             )
+        # Attach user info to request for use in route handlers
         request.state.user = user
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Authentication error: {str(e)}"}
+        )
     finally:
         conn.close()
 

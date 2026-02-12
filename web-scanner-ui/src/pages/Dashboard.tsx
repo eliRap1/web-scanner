@@ -6,6 +6,8 @@ interface ScanSummary {
   active: number
   completed: number
   failed: number
+  pending: number
+  total_findings: number
 }
 
 interface RecentScan {
@@ -17,9 +19,10 @@ interface RecentScan {
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<ScanSummary>({ total: 0, active: 0, completed: 0, failed: 0 })
+  const [stats, setStats] = useState<ScanSummary>({ total: 0, active: 0, completed: 0, failed: 0, pending: 0, total_findings: 0 })
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     fetchDashboardData()
@@ -27,27 +30,39 @@ export default function Dashboard() {
 
   async function fetchDashboardData() {
     const token = localStorage.getItem("token")
-    try {
-      // Fetch scan stats - you may need to create this endpoint
-      // For now using placeholder data
-      setStats({
-        total: 12,
-        active: 1,
-        completed: 10,
-        failed: 1
-      })
+    if (!token) {
+      setError("Not authenticated")
+      setLoading(false)
+      return
+    }
 
-      // Fetch recent scans
-      const res = await fetch(`${API_BASE}/scans`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      
-      if (res.ok) {
-        const data = await res.json()
-        setRecentScans(data.slice(0, 5))
+    try {
+      // Fetch stats and scans in parallel
+      const [statsRes, scansRes] = await Promise.all([
+        fetch(`${API_BASE}/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/scans`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ])
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json()
+        setStats(statsData)
+      }
+
+      if (scansRes.ok) {
+        const scansData = await scansRes.json()
+        // Get the 5 most recent scans
+        setRecentScans(scansData.slice(0, 5))
+      } else {
+        const errData = await scansRes.json()
+        setError(errData.detail || "Failed to fetch scans")
       }
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err)
+      setError("Network error - is the server running?")
     } finally {
       setLoading(false)
     }
@@ -64,7 +79,20 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 className="page-title">📊 Dashboard</h1>
+      <h1 className="page-title">Dashboard</h1>
+
+      {error && (
+        <div style={{
+          padding: "12px 16px",
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          borderRadius: "8px",
+          color: "#dc2626",
+          marginBottom: "20px"
+        }}>
+          {error}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid" style={{ marginBottom: "40px" }}>
@@ -96,9 +124,9 @@ export default function Dashboard() {
           <a href="/scan" className="btn btn-primary" style={{ textDecoration: "none" }}>
             🔍 New Scan
           </a>
-          <button className="btn btn-secondary">
+          <a href="/reports" className="btn btn-secondary" style={{ textDecoration: "none" }}>
             📄 View Reports
-          </button>
+          </a>
           <button className="btn btn-secondary">
             ⚙️ Settings
           </button>

@@ -4,6 +4,7 @@ import Register from "./pages/Register"
 import Dashboard from "./pages/Dashboard"
 import Sidebar from "./components/Sidebar"
 import NewScan from "./pages/NewScan"
+import Reports from "./pages/Reports"
 
 export default function App() {
   const token = localStorage.getItem("token")
@@ -25,6 +26,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/scan" element={<NewScan />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>

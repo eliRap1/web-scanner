@@ -1,0 +1,2054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulnerability Scan Report - Scan #36</title>
+    <style>
+        /* ==================== BASE STYLES ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #1a1a2e;
+            background: #f8f9fa;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        /* ==================== HEADER ==================== */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header .meta {
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .header .meta span {
+            margin-right: 20px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        h2 {
+            color: #1a1a2e;
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        h3 {
+            color: #1a1a2e;
+            font-size: 16px;
+            margin: 20px 0 10px 0;
+        }
+
+        /* ==================== STATS GRID ==================== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+
+        .stat-box {
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+        }
+
+        .stat-box .number {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .stat-box .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .stat-critical { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+        .stat-high { background: linear-gradient(135deg, #ea580c, #c2410c); }
+        .stat-medium { background: linear-gradient(135deg, #ca8a04, #a16207); }
+        .stat-low { background: linear-gradient(135deg, #16a34a, #15803d); }
+        .stat-total { background: linear-gradient(135deg, #1a1a2e, #16213e); }
+
+        /* ==================== RISK METER ==================== */
+        .risk-meter {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .risk-meter h3 {
+            margin-bottom: 15px;
+            color: #1a1a2e;
+        }
+
+        .risk-bar {
+            height: 24px;
+            background: #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .risk-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .risk-low { background: linear-gradient(90deg, #22c55e, #16a34a); }
+        .risk-medium { background: linear-gradient(90deg, #eab308, #ca8a04); }
+        .risk-high { background: linear-gradient(90deg, #f97316, #ea580c); }
+        .risk-critical { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+        /* ==================== CHARTS ==================== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .chart-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .chart-container h3 {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Simple CSS Bar Chart */
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bar-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bar-label {
+            width: 100px;
+            font-size: 13px;
+            text-align: right;
+        }
+
+        .bar-track {
+            flex: 1;
+            height: 24px;
+            background: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            min-width: 30px;
+        }
+
+        .bar-count {
+            width: 40px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* Donut Chart (CSS only) */
+        .donut-chart {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .donut-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .donut-center .total {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .donut-center .label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        /* ==================== TABLES ==================== */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .data-table code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        /* ==================== VULNERABILITY CARDS ==================== */
+        .vulnerability {
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+
+        .vuln-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .vuln-header h3 {
+            font-size: 16px;
+            color: #1a1a2e;
+            margin: 0;
+        }
+
+        .severity-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: white;
+        }
+
+        .badge-critical { background: #dc2626; }
+        .badge-high { background: #ea580c; }
+        .badge-medium { background: #ca8a04; }
+        .badge-low { background: #16a34a; }
+        .badge-info { background: #0ea5e9; }
+
+        .vuln-body {
+            padding: 20px;
+        }
+
+        .vuln-detail {
+            margin-bottom: 15px;
+        }
+
+        .vuln-detail label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .vuln-detail code {
+            display: block;
+            background: #f1f5f9;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            color: #334155;
+        }
+
+        .vuln-detail p {
+            color: #374151;
+        }
+
+        .confidence-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .confidence-track {
+            flex: 1;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+        }
+
+        .confidence-high { background: #16a34a; }
+        .confidence-medium { background: #ca8a04; }
+        .confidence-low { background: #ea580c; }
+
+        /* ==================== REMEDIATION SECTION ==================== */
+        .remediation-section {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .remediation-section h4 {
+            color: #166534;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .remediation-section ul {
+            margin-left: 20px;
+            color: #166534;
+        }
+
+        .remediation-section li {
+            margin-bottom: 5px;
+        }
+
+        .code-example {
+            background: #1e1e2e;
+            color: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            overflow-x: auto;
+        }
+
+        .code-example pre {
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .code-example .label {
+            color: #22c55e;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* ==================== TYPE BREAKDOWN ==================== */
+        .type-breakdown {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .type-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .type-item .name {
+            font-weight: 500;
+        }
+
+        .type-item .count {
+            background: #1a1a2e;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        /* ==================== INFO BOXES ==================== */
+        .info-box {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box.success {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            color: #166534;
+        }
+
+        .info-box.warning {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            color: #92400e;
+        }
+
+        .info-box.danger {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        /* ==================== FOOTER ==================== */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            color: #6b7280;
+            font-size: 13px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        /* ==================== TOC ==================== */
+        .toc {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            margin-bottom: 15px;
+        }
+
+        .toc ul {
+            list-style: none;
+        }
+
+        .toc li {
+            padding: 5px 0;
+        }
+
+        .toc a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        /* ==================== PRINT STYLES ==================== */
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .vulnerability {
+                page-break-inside: avoid;
+            }
+
+            .charts-grid {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* ==================== SECTION DIVIDER ==================== */
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e9ecef, transparent);
+            margin: 40px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ==================== HEADER ==================== -->
+        <div class="header">
+            <h1>Vulnerability Scan Report</h1>
+            <div class="meta">
+                <span><strong>Scan ID:</strong> #36</span>
+                <span><strong>Target:</strong> https://pentest-ground.com:81</span>
+                <span><strong>Date:</strong> 2026-01-26 20:24:35</span>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- ==================== TABLE OF CONTENTS ==================== -->
+            <div class="toc">
+                <h3>Table of Contents</h3>
+                <ul>
+                    <li><a href="#summary">1. Executive Summary</a></li>
+                    <li><a href="#overview">2. Vulnerability Overview</a></li>
+                    <li><a href="#findings">3. Detailed Findings</a></li>
+                    <li><a href="#remediation">4. Remediation Guide</a></li>
+                    <li><a href="#methodology">5. Methodology</a></li>
+                </ul>
+            </div>
+
+            <!-- ==================== EXECUTIVE SUMMARY ==================== -->
+            <h2 id="summary">1. Executive Summary</h2>
+
+            <div class="stats-grid">
+                <div class="stat-box stat-total">
+                    <div class="number">8</div>
+                    <div class="label">Total</div>
+                </div>
+                <div class="stat-box stat-critical">
+                    <div class="number">0</div>
+                    <div class="label">Critical</div>
+                </div>
+                <div class="stat-box stat-high">
+                    <div class="number">8</div>
+                    <div class="label">High</div>
+                </div>
+                <div class="stat-box stat-medium">
+                    <div class="number">0</div>
+                    <div class="label">Medium</div>
+                </div>
+                <div class="stat-box stat-low">
+                    <div class="number">0</div>
+                    <div class="label">Low</div>
+                </div>
+            </div>
+
+            <!-- Risk Score -->
+            <div class="risk-meter">
+                <h3>Overall Risk Score</h3>
+                <div class="risk-bar">
+                    
+                    <div class="risk-fill risk-critical" style="width: 100%">100/100</div>
+                    
+                </div>
+                <p style="margin-top: 10px; color: #6b7280; font-size: 13px;">
+                    
+                    Critical risk - Severe vulnerabilities found. Urgent remediation required.
+                    
+                </p>
+            </div>
+
+            <!-- Scan Info Table -->
+            <table class="data-table">
+                <tr>
+                    <th style="width: 200px;">Property</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Target URL</td>
+                    <td><code>https://pentest-ground.com:81</code></td>
+                </tr>
+                <tr>
+                    <td>Scan Start</td>
+                    <td>2026-01-26 18:04:14</td>
+                </tr>
+                <tr>
+                    <td>Scan End</td>
+                    <td>2026-01-26 18:04:50</td>
+                </tr>
+                <tr>
+                    <td>Status</td>
+                    <td>completed</td>
+                </tr>
+                <tr>
+                    <td>Total Vulnerabilities</td>
+                    <td>8</td>
+                </tr>
+            </table>
+
+            <div class="section-divider"></div>
+
+            <!-- ==================== OVERVIEW ==================== -->
+            <h2 id="overview">2. Vulnerability Overview</h2>
+
+            <div class="charts-grid">
+                <!-- Severity Distribution Chart -->
+                <div class="chart-container">
+                    <h3>Severity Distribution</h3>
+                    <div class="bar-chart">
+                        <div class="bar-row">
+                            <span class="bar-label">Critical</span>
+                            <div class="bar-track">
+                                <div class="bar-fill badge-critical" style="width: 0.0%"></div>
+                            </div>
+                            <span class="bar-count">0</span>
+                        </div>
+                        <div class="bar-row">
+                            <span class="bar-label">High</span>
+                            <div class="bar-track">
+                                <div class="bar-fill badge-high" style="width: 100.0%"></div>
+                            </div>
+                            <span class="bar-count">8</span>
+                        </div>
+                        <div class="bar-row">
+                            <span class="bar-label">Medium</span>
+                            <div class="bar-track">
+                                <div class="bar-fill badge-medium" style="width: 0.0%"></div>
+                            </div>
+                            <span class="bar-count">0</span>
+                        </div>
+                        <div class="bar-row">
+                            <span class="bar-label">Low</span>
+                            <div class="bar-track">
+                                <div class="bar-fill badge-low" style="width: 0.0%"></div>
+                            </div>
+                            <span class="bar-count">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vulnerability Types -->
+                <div class="chart-container">
+                    <h3>Vulnerability Types</h3>
+                    
+                    <div class="bar-chart">
+                        
+                        <div class="bar-row">
+                            <span class="bar-label" style="width: 120px;">SQL Injection (</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: 12.5%; background: #3b82f6;"></div>
+                            </div>
+                            <span class="bar-count">1</span>
+                        </div>
+                        
+                        <div class="bar-row">
+                            <span class="bar-label" style="width: 120px;">NoSQL Injection</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: 37.5%; background: #3b82f6;"></div>
+                            </div>
+                            <span class="bar-count">3</span>
+                        </div>
+                        
+                        <div class="bar-row">
+                            <span class="bar-label" style="width: 120px;">NoSQL Injection</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: 12.5%; background: #3b82f6;"></div>
+                            </div>
+                            <span class="bar-count">1</span>
+                        </div>
+                        
+                        <div class="bar-row">
+                            <span class="bar-label" style="width: 120px;">XXE (Error-base</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: 37.5%; background: #3b82f6;"></div>
+                            </div>
+                            <span class="bar-count">3</span>
+                        </div>
+                        
+                    </div>
+                    
+                </div>
+            </div>
+
+            <!-- Vulnerability Summary Table -->
+            
+            <h3>Vulnerabilities Summary Table</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>URL</th>
+                        <th>Parameter</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>1</td>
+                        <td>SQL Injection (Boolean-based Blind)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>85%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2</td>
+                        <td>NoSQL Injection (operator)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>85%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>3</td>
+                        <td>NoSQL Injection (operator)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>85%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>4</td>
+                        <td>NoSQL Injection (operator)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>85%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>5</td>
+                        <td>NoSQL Injection (where)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>85%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>6</td>
+                        <td>XXE (Error-based)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>75%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>7</td>
+                        <td>XXE (Error-based)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>75%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>8</td>
+                        <td>XXE (Error-based)</td>
+                        <td>
+                            <span class="severity-badge badge-high">
+                                HIGH
+                            </span>
+                        </td>
+                        <td><code>https://pentest-ground.com:81/search</code></td>
+                        <td><code>query</code></td>
+                        <td>75%</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+            
+
+            <div class="section-divider"></div>
+
+            <!-- ==================== DETAILED FINDINGS ==================== -->
+            <h2 id="findings">3. Detailed Findings</h2>
+
+            
+
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>1. SQL Injection (Boolean-based Blind)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code>' OR '1'='1' --</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '' OR '1'='1' --' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 85%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">85%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>2. NoSQL Injection (operator)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code>{"$gt": ""}</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '{"$gt": ""}' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 85%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">85%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>3. NoSQL Injection (operator)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code>{"$ne": null}</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '{"$ne": null}' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 85%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">85%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>4. NoSQL Injection (operator)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code>{"$ne": ""}</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '{"$ne": ""}' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 85%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">85%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>5. NoSQL Injection (where)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code>{"$where": "1==1"}</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '{"$where": "1==1"}' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 85%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">85%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>6. XXE (Error-based)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code><?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>...</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>...' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 75%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">75%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Disable DTDs (Document Type Definitions) completely</li>
+                            
+                            <li>Disable external entity processing</li>
+                            
+                            <li>Use less complex data formats (JSON) when possible</li>
+                            
+                            <li>Validate and sanitize XML input</li>
+                            
+                            <li>Keep XML processors updated</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>7. XXE (Error-based)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code><?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</f...</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</f...' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 75%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">75%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Disable DTDs (Document Type Definitions) completely</li>
+                            
+                            <li>Disable external entity processing</li>
+                            
+                            <li>Use less complex data formats (JSON) when possible</li>
+                            
+                            <li>Validate and sanitize XML input</li>
+                            
+                            <li>Keep XML processors updated</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-header">
+                    <h3>8. XXE (Error-based)</h3>
+                    <span class="severity-badge badge-high">
+                        HIGH
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    <div class="vuln-detail">
+                        <label>Affected URL</label>
+                        <code>https://pentest-ground.com:81/search</code>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Vulnerable Parameter</label>
+                        <code>query</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Payload Used</label>
+                        <code><?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://127.0.0.1:80/">]><foo>&xxe;</foo>...</code>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Description</label>
+                        <p>Vulnerability found in parameter 'query' at https://pentest-ground.com:81/search</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Evidence</label>
+                        <p>Payload '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://127.0.0.1:80/">]><foo>&xxe;</foo>...' triggered vulnerability detection</p>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>Confidence Level</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-track">
+                                <div class="confidence-fill confidence-medium" style="width: 75%;"></div>
+                            </div>
+                            <span style="font-weight: 600;">75%</span>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Inline Remediation for each vulnerability -->
+                    
+                    <div class="remediation-section">
+                        <h4>How to Fix</h4>
+                        <ul>
+                            
+                            <li>Disable DTDs (Document Type Definitions) completely</li>
+                            
+                            <li>Disable external entity processing</li>
+                            
+                            <li>Use less complex data formats (JSON) when possible</li>
+                            
+                            <li>Validate and sanitize XML input</li>
+                            
+                            <li>Keep XML processors updated</li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+            </div>
+            
+
+            
+
+            <div class="section-divider"></div>
+
+            <!-- ==================== REMEDIATION GUIDE ==================== -->
+            <h2 id="remediation">4. Remediation Guide</h2>
+
+            
+
+            <p style="margin-bottom: 20px; color: #374151;">
+                This section provides detailed guidance on how to fix the vulnerabilities found during the scan.
+                Each vulnerability type includes an explanation of how the attack works and code examples for remediation.
+            </p>
+
+            
+            <div class="vulnerability" style="margin-bottom: 30px;">
+                <div class="vuln-header">
+                    <h3>SQL Injection (Boolean-based Blind)</h3>
+                    <span class="severity-badge badge-high">
+                        1 Finding(s)
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    
+                    
+
+                    <div class="vuln-detail">
+                        <label>What is SQL Injection (Boolean-based Blind)?</label>
+                        <p>
+            SQL Injection occurs when untrusted data is sent to an interpreter as part of
+            a command or query. The attacker's hostile data can trick the interpreter into
+            executing unintended commands or accessing data without authorization.
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>How the Attack Works</label>
+                        <p>
+            1. Application builds SQL queries using string concatenation with user input
+            2. Attacker provides malicious input containing SQL syntax
+            3. The database executes the modified query
+            4. Attacker can read, modify, or delete data; bypass authentication
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>Potential Impact</label>
+                        <ul style="margin-left: 20px; color: #991b1b;">
+                            
+                            <li>Complete database compromise</li>
+                            
+                            <li>Data theft (credentials, personal info, financial data)</li>
+                            
+                            <li>Data modification or deletion</li>
+                            
+                            <li>Authentication bypass</li>
+                            
+                            <li>Remote code execution (in some cases)</li>
+                            
+                            <li>Full server compromise</li>
+                            
+                        </ul>
+                    </div>
+
+                    <div class="remediation-section">
+                        <h4>Remediation Steps</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Code Examples</label>
+                        <div class="code-example">
+                            <span class="label">VULNERABLE CODE:</span>
+                            <pre>
+# VULNERABLE CODE (Python)
+query = "SELECT * FROM users WHERE username = '" + username + "'"
+cursor.execute(query)
+
+# VULNERABLE CODE (PHP)
+$query = "SELECT * FROM users WHERE id = " . $_GET['id'];
+$result = mysqli_query($conn, $query);
+            </pre>
+                        </div>
+                        <div class="code-example" style="margin-top: 10px; background: #0f3d0f;">
+                            <span class="label" style="color: #86efac;">SECURE CODE:</span>
+                            <pre>
+# SECURE CODE (Python with parameterized query)
+query = "SELECT * FROM users WHERE username = ?"
+cursor.execute(query, (username,))
+
+# SECURE CODE (Python with SQLAlchemy ORM)
+user = session.query(User).filter(User.username == username).first()
+
+# SECURE CODE (PHP with PDO)
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$_GET['id']]);
+            </pre>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>References</label>
+                        <ul style="margin-left: 20px;">
+                            
+                            <li><a href="https://owasp.org/www-community/attacks/SQL_Injection" target="_blank" style="color: #3b82f6;">https://owasp.org/www-community/attacks/SQL_Injection</a></li>
+                            
+                            <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" target="_blank" style="color: #3b82f6;">https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html</a></li>
+                            
+                        </ul>
+                    </div>
+                    
+
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: #f1f5f9; border-radius: 6px;">
+                        <span style="margin-right: 15px;"><strong>CWE:</strong> CWE-89</span>
+                        <span><strong>OWASP:</strong> A03:2021 - Injection</span>
+                    </div>
+                    
+
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability" style="margin-bottom: 30px;">
+                <div class="vuln-header">
+                    <h3>NoSQL Injection (operator)</h3>
+                    <span class="severity-badge badge-high">
+                        3 Finding(s)
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    
+                    
+
+                    <div class="vuln-detail">
+                        <label>What is NoSQL Injection (operator)?</label>
+                        <p>
+            SQL Injection occurs when untrusted data is sent to an interpreter as part of
+            a command or query. The attacker's hostile data can trick the interpreter into
+            executing unintended commands or accessing data without authorization.
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>How the Attack Works</label>
+                        <p>
+            1. Application builds SQL queries using string concatenation with user input
+            2. Attacker provides malicious input containing SQL syntax
+            3. The database executes the modified query
+            4. Attacker can read, modify, or delete data; bypass authentication
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>Potential Impact</label>
+                        <ul style="margin-left: 20px; color: #991b1b;">
+                            
+                            <li>Complete database compromise</li>
+                            
+                            <li>Data theft (credentials, personal info, financial data)</li>
+                            
+                            <li>Data modification or deletion</li>
+                            
+                            <li>Authentication bypass</li>
+                            
+                            <li>Remote code execution (in some cases)</li>
+                            
+                            <li>Full server compromise</li>
+                            
+                        </ul>
+                    </div>
+
+                    <div class="remediation-section">
+                        <h4>Remediation Steps</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Code Examples</label>
+                        <div class="code-example">
+                            <span class="label">VULNERABLE CODE:</span>
+                            <pre>
+# VULNERABLE CODE (Python)
+query = "SELECT * FROM users WHERE username = '" + username + "'"
+cursor.execute(query)
+
+# VULNERABLE CODE (PHP)
+$query = "SELECT * FROM users WHERE id = " . $_GET['id'];
+$result = mysqli_query($conn, $query);
+            </pre>
+                        </div>
+                        <div class="code-example" style="margin-top: 10px; background: #0f3d0f;">
+                            <span class="label" style="color: #86efac;">SECURE CODE:</span>
+                            <pre>
+# SECURE CODE (Python with parameterized query)
+query = "SELECT * FROM users WHERE username = ?"
+cursor.execute(query, (username,))
+
+# SECURE CODE (Python with SQLAlchemy ORM)
+user = session.query(User).filter(User.username == username).first()
+
+# SECURE CODE (PHP with PDO)
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$_GET['id']]);
+            </pre>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>References</label>
+                        <ul style="margin-left: 20px;">
+                            
+                            <li><a href="https://owasp.org/www-community/attacks/SQL_Injection" target="_blank" style="color: #3b82f6;">https://owasp.org/www-community/attacks/SQL_Injection</a></li>
+                            
+                            <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" target="_blank" style="color: #3b82f6;">https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html</a></li>
+                            
+                        </ul>
+                    </div>
+                    
+
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: #f1f5f9; border-radius: 6px;">
+                        <span style="margin-right: 15px;"><strong>CWE:</strong> CWE-89</span>
+                        <span><strong>OWASP:</strong> A03:2021 - Injection</span>
+                    </div>
+                    
+
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability" style="margin-bottom: 30px;">
+                <div class="vuln-header">
+                    <h3>NoSQL Injection (where)</h3>
+                    <span class="severity-badge badge-high">
+                        1 Finding(s)
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    
+                    
+
+                    <div class="vuln-detail">
+                        <label>What is NoSQL Injection (where)?</label>
+                        <p>
+            SQL Injection occurs when untrusted data is sent to an interpreter as part of
+            a command or query. The attacker's hostile data can trick the interpreter into
+            executing unintended commands or accessing data without authorization.
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>How the Attack Works</label>
+                        <p>
+            1. Application builds SQL queries using string concatenation with user input
+            2. Attacker provides malicious input containing SQL syntax
+            3. The database executes the modified query
+            4. Attacker can read, modify, or delete data; bypass authentication
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>Potential Impact</label>
+                        <ul style="margin-left: 20px; color: #991b1b;">
+                            
+                            <li>Complete database compromise</li>
+                            
+                            <li>Data theft (credentials, personal info, financial data)</li>
+                            
+                            <li>Data modification or deletion</li>
+                            
+                            <li>Authentication bypass</li>
+                            
+                            <li>Remote code execution (in some cases)</li>
+                            
+                            <li>Full server compromise</li>
+                            
+                        </ul>
+                    </div>
+
+                    <div class="remediation-section">
+                        <h4>Remediation Steps</h4>
+                        <ul>
+                            
+                            <li>Use parameterized queries (prepared statements) for ALL database queries</li>
+                            
+                            <li>Use ORM frameworks that handle parameterization automatically</li>
+                            
+                            <li>Apply the principle of least privilege to database accounts</li>
+                            
+                            <li>Validate and sanitize all user input</li>
+                            
+                            <li>Use stored procedures with parameterized inputs</li>
+                            
+                            <li>Implement Web Application Firewall (WAF) as defense-in-depth</li>
+                            
+                        </ul>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Code Examples</label>
+                        <div class="code-example">
+                            <span class="label">VULNERABLE CODE:</span>
+                            <pre>
+# VULNERABLE CODE (Python)
+query = "SELECT * FROM users WHERE username = '" + username + "'"
+cursor.execute(query)
+
+# VULNERABLE CODE (PHP)
+$query = "SELECT * FROM users WHERE id = " . $_GET['id'];
+$result = mysqli_query($conn, $query);
+            </pre>
+                        </div>
+                        <div class="code-example" style="margin-top: 10px; background: #0f3d0f;">
+                            <span class="label" style="color: #86efac;">SECURE CODE:</span>
+                            <pre>
+# SECURE CODE (Python with parameterized query)
+query = "SELECT * FROM users WHERE username = ?"
+cursor.execute(query, (username,))
+
+# SECURE CODE (Python with SQLAlchemy ORM)
+user = session.query(User).filter(User.username == username).first()
+
+# SECURE CODE (PHP with PDO)
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$_GET['id']]);
+            </pre>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>References</label>
+                        <ul style="margin-left: 20px;">
+                            
+                            <li><a href="https://owasp.org/www-community/attacks/SQL_Injection" target="_blank" style="color: #3b82f6;">https://owasp.org/www-community/attacks/SQL_Injection</a></li>
+                            
+                            <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" target="_blank" style="color: #3b82f6;">https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html</a></li>
+                            
+                        </ul>
+                    </div>
+                    
+
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: #f1f5f9; border-radius: 6px;">
+                        <span style="margin-right: 15px;"><strong>CWE:</strong> CWE-89</span>
+                        <span><strong>OWASP:</strong> A03:2021 - Injection</span>
+                    </div>
+                    
+
+                    
+                </div>
+            </div>
+            
+            <div class="vulnerability" style="margin-bottom: 30px;">
+                <div class="vuln-header">
+                    <h3>XXE (Error-based)</h3>
+                    <span class="severity-badge badge-high">
+                        3 Finding(s)
+                    </span>
+                </div>
+                <div class="vuln-body">
+                    
+                    
+
+                    <div class="vuln-detail">
+                        <label>What is XXE (Error-based)?</label>
+                        <p>
+            XXE occurs when XML input containing a reference to an external entity is
+            processed by a weakly configured XML parser. Attackers can use external
+            entities to access files, perform SSRF, or cause denial of service.
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>How the Attack Works</label>
+                        <p>
+            1. Application parses XML from user input
+            2. Attacker includes DOCTYPE with external entity definition
+            3. Parser resolves the external entity (file, URL)
+            4. Content of file/URL is included in response or error
+        </p>
+                    </div>
+
+                    <div class="vuln-detail">
+                        <label>Potential Impact</label>
+                        <ul style="margin-left: 20px; color: #991b1b;">
+                            
+                            <li>Local file disclosure</li>
+                            
+                            <li>Server-side request forgery</li>
+                            
+                            <li>Denial of service (billion laughs attack)</li>
+                            
+                            <li>Port scanning</li>
+                            
+                            <li>Remote code execution (rare)</li>
+                            
+                        </ul>
+                    </div>
+
+                    <div class="remediation-section">
+                        <h4>Remediation Steps</h4>
+                        <ul>
+                            
+                            <li>Disable DTDs (Document Type Definitions) completely</li>
+                            
+                            <li>Disable external entity processing</li>
+                            
+                            <li>Use less complex data formats (JSON) when possible</li>
+                            
+                            <li>Validate and sanitize XML input</li>
+                            
+                            <li>Keep XML processors updated</li>
+                            
+                        </ul>
+                    </div>
+
+                    
+                    <div class="vuln-detail">
+                        <label>Code Examples</label>
+                        <div class="code-example">
+                            <span class="label">VULNERABLE CODE:</span>
+                            <pre>
+# VULNERABLE CODE (Python)
+from lxml import etree
+xml_data = request.data
+doc = etree.fromstring(xml_data)  # Vulnerable to XXE
+            </pre>
+                        </div>
+                        <div class="code-example" style="margin-top: 10px; background: #0f3d0f;">
+                            <span class="label" style="color: #86efac;">SECURE CODE:</span>
+                            <pre>
+# SECURE CODE (Python with lxml)
+from lxml import etree
+
+xml_data = request.data
+parser = etree.XMLParser(
+    resolve_entities=False,  # Disable entity resolution
+    no_network=True,         # Disable network access
+    dtd_validation=False,    # Disable DTD validation
+    load_dtd=False           # Don't load DTD
+)
+doc = etree.fromstring(xml_data, parser=parser)
+
+# SECURE CODE (Python with defusedxml - recommended)
+import defusedxml.ElementTree as ET
+doc = ET.fromstring(xml_data)  # Safe by default
+            </pre>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <div class="vuln-detail">
+                        <label>References</label>
+                        <ul style="margin-left: 20px;">
+                            
+                            <li><a href="https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE)_Processing" target="_blank" style="color: #3b82f6;">https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE)_Processing</a></li>
+                            
+                        </ul>
+                    </div>
+                    
+
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: #f1f5f9; border-radius: 6px;">
+                        <span style="margin-right: 15px;"><strong>CWE:</strong> CWE-611</span>
+                        <span><strong>OWASP:</strong> A05:2021 - Security Misconfiguration</span>
+                    </div>
+                    
+
+                    
+                </div>
+            </div>
+            
+
+            
+
+            <div class="section-divider"></div>
+
+            <!-- ==================== METHODOLOGY ==================== -->
+            <h2 id="methodology">5. Methodology</h2>
+
+            <p style="margin-bottom: 20px; color: #374151;">
+                This automated scan was performed using the Web Vulnerability Scanner, which employs
+                the following techniques to discover and test for vulnerabilities:
+            </p>
+
+            <h3>Scanning Phases</h3>
+            <table class="data-table">
+                <tr>
+                    <th style="width: 150px;">Phase</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><strong>1. Discovery</strong></td>
+                    <td>Crawls the target website to discover pages, forms, API endpoints, and parameters using browser automation (Playwright).</td>
+                </tr>
+                <tr>
+                    <td><strong>2. Analysis</strong></td>
+                    <td>Analyzes discovered elements to identify potential injection points and build a map of testable targets.</td>
+                </tr>
+                <tr>
+                    <td><strong>3. Testing</strong></td>
+                    <td>Tests each target with specialized payloads for various vulnerability types (XSS, SQLi, etc.).</td>
+                </tr>
+                <tr>
+                    <td><strong>4. Validation</strong></td>
+                    <td>Confirms findings using multi-stage validation to reduce false positives. Assigns confidence scores.</td>
+                </tr>
+            </table>
+
+            <h3>Vulnerability Types Tested</h3>
+            <div class="type-breakdown">
+                <div class="type-item"><span class="name">Cross-Site Scripting (XSS)</span></div>
+                <div class="type-item"><span class="name">SQL Injection</span></div>
+                <div class="type-item"><span class="name">NoSQL Injection</span></div>
+                <div class="type-item"><span class="name">Path Traversal</span></div>
+                <div class="type-item"><span class="name">Open Redirect</span></div>
+                <div class="type-item"><span class="name">SSTI</span></div>
+                <div class="type-item"><span class="name">Command Injection</span></div>
+                <div class="type-item"><span class="name">SSRF</span></div>
+                <div class="type-item"><span class="name">XXE</span></div>
+                <div class="type-item"><span class="name">Header Injection</span></div>
+            </div>
+
+            <div class="info-box warning">
+                <strong>Disclaimer:</strong> This automated scan may not detect all vulnerabilities.
+                Manual penetration testing by qualified security professionals is recommended for
+                comprehensive security assessment. Always obtain proper authorization before scanning.
+            </div>
+
+        </div>
+
+        <!-- ==================== FOOTER ==================== -->
+        <div class="footer">
+            <p><strong>Web Vulnerability Scanner</strong></p>
+            <p>Report generated on 2026-01-26 20:24:35</p>
+            <p style="margin-top: 10px; font-size: 11px; color: #9ca3af;">
+                This report is confidential and intended for authorized personnel only.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

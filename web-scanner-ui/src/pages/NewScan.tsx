@@ -37,6 +37,7 @@ export default function NewScan() {
   const [targetLoginUrl, setTargetLoginUrl] = useState("")
   const [targetUsername, setTargetUsername] = useState("")
   const [targetPassword, setTargetPassword] = useState("")
+  const [proxy, setProxy] = useState("")  // e.g., "http://127.0.0.1:8080" for Burp
 
   const [jobId, setJobId] = useState<string | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
@@ -68,7 +69,8 @@ export default function NewScan() {
         max_pages: String(maxPages),
         target_login_url: targetLoginUrl,
         target_username: targetUsername,
-        target_password: targetPassword
+        target_password: targetPassword,
+        ...(proxy && { proxy })  // Only include if set
       })
 
       const res = await fetch(`${API_BASE}/scan/?${params}`, {
@@ -246,6 +248,90 @@ export default function NewScan() {
         </div>
       </div>
 
+      {/* Proxy Configuration */}
+      <div className="scan-section">
+        <h3>🔧 Proxy Integration <span className="optional">(Optional)</span></h3>
+        <p className="text-muted mb-2" style={{ fontSize: "0.9rem" }}>
+          Route all scanner traffic through a proxy like Burp Suite or OWASP ZAP to inspect requests.
+        </p>
+
+        <div className="form-group">
+          <label>Proxy URL</label>
+          <input
+            className="form-input"
+            placeholder="http://127.0.0.1:8080"
+            value={proxy}
+            onChange={e => setProxy(e.target.value)}
+          />
+          <div style={{ marginTop: "8px", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+            <strong>Common proxies:</strong>
+            <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+              <button
+                type="button"
+                onClick={() => setProxy("http://127.0.0.1:8080")}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "4px",
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                  fontSize: "0.8rem"
+                }}
+              >
+                Burp Suite (8080)
+              </button>
+              <button
+                type="button"
+                onClick={() => setProxy("http://127.0.0.1:8081")}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "4px",
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                  fontSize: "0.8rem"
+                }}
+              >
+                OWASP ZAP (8081)
+              </button>
+              {proxy && (
+                <button
+                  type="button"
+                  onClick={() => setProxy("")}
+                  style={{
+                    background: "var(--accent-danger)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    fontSize: "0.8rem"
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {proxy && (
+          <div style={{
+            background: "rgba(34, 197, 94, 0.1)",
+            border: "1px solid rgba(34, 197, 94, 0.3)",
+            borderRadius: "8px",
+            padding: "12px",
+            marginTop: "12px",
+            fontSize: "0.85rem"
+          }}>
+            <strong style={{ color: "#22c55e" }}>✓ Proxy enabled:</strong> {proxy}
+            <div style={{ marginTop: "4px", color: "var(--text-muted)" }}>
+              All scanner traffic will be routed through this proxy. Make sure your proxy is running!
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Error Display */}
       {error && (
         <div className="error" style={{ marginBottom: "20px" }}>
@@ -291,6 +377,12 @@ export default function NewScan() {
               <div className="progress-stat">
                 <div className="label">Testing Progress</div>
                 <div className="value">{progress?.testing_target || 0}/{progress?.total_targets || 0}</div>
+              </div>
+            )}
+            {proxy && (
+              <div className="progress-stat">
+                <div className="label">Proxy</div>
+                <div className="value" style={{ color: "#22c55e", fontSize: "0.8rem" }}>✓ Active</div>
               </div>
             )}
           </div>
