@@ -6,7 +6,10 @@ import db.database as database
 from fastapi import APIRouter
 router = APIRouter()
 
-#app = FastAPI(title="Web Scanner - Auth (Registration)")
+# Standalone app — used by the auth-flow test suite which mounts only the
+# registration router (so it can exercise registration without spinning up the
+# full main app and its background workers).
+app = FastAPI(title="Web Scanner - Auth (Registration)")
 
 
 # ---------- Models ----------
@@ -118,7 +121,11 @@ def health_check():
     return {"status": "ok", "service": "registration"}
 
 
+# Mount the router on the standalone app declared above so it's testable in
+# isolation. The full main app mounts the same router separately.
+app.include_router(router)
+
+
 if __name__ == "__main__":
-    
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

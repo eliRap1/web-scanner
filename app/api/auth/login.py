@@ -5,6 +5,10 @@ from fastapi import APIRouter
 router = APIRouter()
 import db.database as database
 
+# Standalone app — used by the auth-flow test suite to mount only the login
+# router. The full main app re-mounts the same router separately.
+app = FastAPI(title="Web Scanner - Auth (Login)")
+
 
 # ---------- Models ----------
 
@@ -231,6 +235,10 @@ def verify_token(request: Request, token: Optional[str] = None):
 def health_check():
     """Check if the API is running"""
     return {"status": "ok", "service": "login"}
+
+
+# Mount the router on the standalone test app.
+app.include_router(router)
 
 
 #if __name__ == "__main__":

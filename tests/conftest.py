@@ -7,10 +7,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-# Ensure project root is importable when pytest runs with different import modes.
+# Ensure project root, app/, and app/api/auth/ are importable so tests can do
+# `import db.database`, `import scanner.engine`, and `import register` /
+# `import login` without depending on $PYTHONPATH or rootdir quirks.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+APP_DIR = PROJECT_ROOT / "app"
+AUTH_DIR = APP_DIR / "api" / "auth"
+for path in (PROJECT_ROOT, APP_DIR, AUTH_DIR):
+    p = str(path)
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 
 @pytest.fixture()
