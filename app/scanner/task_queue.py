@@ -91,7 +91,7 @@ def watchdog_loop():
         time.sleep(WATCHDOG_INTERVAL_SECONDS)
 
 
-def add_job(url: str, max_pages: int, cookies=None, user_id: int = None, proxy: str = None) -> str:
+def add_job(url: str, max_pages: int, cookies=None, user_id: int = None, proxy: str = None, enable_graph_analysis: bool = False) -> str:
     """
     Adds a job to the queue AND creates a persistent record in the database.
     Feature 4.5: stores queued_at, and start_time/end_time are tracked properly.
@@ -122,6 +122,7 @@ def add_job(url: str, max_pages: int, cookies=None, user_id: int = None, proxy: 
             "max_pages": max_pages,
             "cookies": cookies,
             "proxy": proxy,  # Proxy support for Burp/ZAP
+            "enable_graph_analysis": enable_graph_analysis,
             # Feature 4.5 timing
             "queued_at": queued_at,
             "start_time": None,
@@ -419,7 +420,40 @@ def process_jobs():
                 set_job_failure(job_uuid, f"Timeout: scan exceeded {JOB_TIMEOUT_SECONDS} seconds")
             else:
                 if scan_result["ok"]:
-                    set_job_result(job_uuid, scan_result["data"])
+                    result_data = scan_result["data"]
+
+                    # Run graph analysis if enabled
+                    if job.get("enable_graph_analysis") and isinstance(result_data, dict):
+                        try:
+                            from scanner.graph_analyzer import VulnerabilityGraph
+                            graph = VulnerabilityGraph()
+                            crawl_graph = result_data.get("crawl_graph", {})
+                            graph.build_from_crawl_data(
+                                visited_urls=crawl_graph.get("visited_urls", []),
+                                page_links={k: set(v) for k, v in crawl_graph.get("page_links", {}).items()},
+                                page_depths=crawl_graph.get("page_depths", {}),
+                                page_parents=crawl_graph.get("page_parents", {}),
+                                findings=result_data.get("findings", []),
+                            )
+                            diagram_data = graph.generate_diagram_data()
+                            result_data["graph_analysis"] = diagram_data
+
+                            # Persist to DB
+                            import json as _json
+                            conn = get_connection()
+                            try:
+                                from db.database import save_graph_data
+                                save_graph_data(conn, db_scan_id, _json.dumps(diagram_data))
+                            finally:
+                                conn.close()
+
+                            logger.info(f"Graph analysis completed for job {job_uuid}: "
+                                        f"{diagram_data['summary']['total_nodes']} nodes, "
+                                        f"{diagram_data['summary']['total_cycles']} cycles")
+                        except Exception as e:
+                            logger.warning(f"Graph analysis failed for job {job_uuid}: {e}")
+
+                    set_job_result(job_uuid, result_data)
                     logger.info(f"Job {job_uuid} completed successfully.")
                 else:
                     set_job_failure(job_uuid, scan_result["error"] or "Unknown scan error")

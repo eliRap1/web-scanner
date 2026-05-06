@@ -111,9 +111,12 @@ async def auth_middleware(request: Request, call_next):
         # Attach user info to request for use in route handlers
         request.state.user = user
     except Exception as e:
+        # Log full error server-side; return generic message to client
+        import logging
+        logging.getLogger("auth.middleware").exception("Auth middleware failure")
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Authentication error: {str(e)}"}
+            content={"detail": "Authentication service unavailable"}
         )
     finally:
         conn.close()

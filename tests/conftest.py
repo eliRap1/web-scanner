@@ -67,7 +67,7 @@ def fake_webscanner(monkeypatch):
     This keeps tests deterministic and fast (no browser/network dependency).
     """
     class FakeWebScanner:
-        def __init__(self, url, max_pages, cookies=None, db_scan_id=None, job_id=None, callback=None):
+        def __init__(self, url, max_pages, cookies=None, db_scan_id=None, job_id=None, callback=None, proxy=None, **kwargs):
             self.url = url
             self.max_pages = max_pages
             self.cookies = cookies
@@ -79,7 +79,30 @@ def fake_webscanner(monkeypatch):
             if self.callback:
                 self.callback(self.job_id, {"current_url": self.url, "visited_count": 1})
                 self.callback(self.job_id, {"new_target": {"url": self.url, "issue": "demo"}})
-            return [{"url": self.url, "issue": "demo"}]
+            return {
+                "targets": [{"url": self.url, "method": "GET", "parameters": ["q"], "context": "url"}],
+                "findings": [{"url": self.url, "type": "XSS", "severity": "high", "parameter": "q", "payload": "<script>alert(1)</script>"}],
+                "api_endpoints": [],
+                "discovered_urls": [self.url],
+                "network_urls": [],
+                "stats": {
+                    "pages_visited": 1,
+                    "pages_discovered": 1,
+                    "forms_found": 0,
+                    "targets_found": 1,
+                    "api_endpoints_found": 0,
+                    "network_requests_captured": 0,
+                    "elements_clicked": 0,
+                    "vulnerabilities_found": 1,
+                    "errors": 0,
+                },
+                "crawl_graph": {
+                    "visited_urls": [self.url],
+                    "page_links": {self.url: []},
+                    "page_depths": {self.url: 0},
+                    "page_parents": {},
+                },
+            }
 
     # Route A import path
     import scanner.engine as engine

@@ -197,6 +197,16 @@ def apply_migrations(conn):
         current_version = 4
         logger.info("[MIGRATION] Upgraded schema -> version 4 (added url, parameter, confidence to Vulnerabilities)")
 
+    # v5 - Add graph_data column to Scans for DFS graph analysis results
+    if current_version < 5:
+        try:
+            c.execute("ALTER TABLE Scans ADD COLUMN graph_data TEXT;")
+        except Exception:
+            pass  # Column may already exist
+        c.execute("PRAGMA user_version = 5;")
+        current_version = 5
+        logger.info("[MIGRATION] Upgraded schema -> version 5 (added graph_data to Scans)")
+
     conn.commit()
     logger.info(f"[MIGRATION] Current schema version: {current_version}")
 
@@ -819,6 +829,20 @@ def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
         ORDER BY severity DESC, timestamp DESC
     """, (scan_id,)).fetchall()
     return rows
+
+def save_graph_data(conn, scan_id: int, graph_data_json: str):
+    """Save JSON-serialized graph analysis data for a scan."""
+    c = conn.cursor()
+    c.execute("UPDATE Scans SET graph_data = ? WHERE scan_id = ?", (graph_data_json, scan_id))
+    conn.commit()
+
+def get_graph_data(conn, scan_id: int) -> Optional[str]:
+    """Get JSON-serialized graph analysis data for a scan."""
+    c = conn.cursor()
+    row = c.execute("SELECT graph_data FROM Scans WHERE scan_id = ?", (scan_id,)).fetchone()
+    if row and row["graph_data"]:
+        return row["graph_data"]
+    return None
 
 def create_report(conn, scan_id):
     """Create a report after scan completes."""

@@ -187,7 +187,12 @@ class ProductionCrawler:
 
         # Session placeholder for backwards compatibility
         self.session = None
-        
+
+        # Graph tracking data (for DFS analysis)
+        self.page_links: Dict[str, Set[str]] = {}
+        self.page_depths: Dict[str, int] = {}
+        self.page_parents: Dict[str, Optional[str]] = {}
+
         # State
         self.visited: Set[str] = set()
         self.queue: deque = deque()
@@ -849,28 +854,37 @@ class ProductionCrawler:
                     
                 self.visited.add(url)
                 self.stats.pages_visited += 1
-                
+
+                # Track depth and parent for graph analysis
+                self.page_depths[url] = depth
+
                 # Report progress
                 self._report_progress(current_url=url, depth=depth)
                 self._log("info", f"Crawling [{len(self.visited)}/{self.max_pages}]: {url}")
-                
+
                 # Crawl the page
                 page_data = self._crawl_page(page, url, depth)
-                
+
+                # Track outgoing links for graph analysis
+                self.page_links[url] = set(page_data.links)
+
                 # Add forms as targets
                 for form in page_data.forms:
                     self._add_form_as_target(form)
-                    
+
                 # Add URLs with parameters as targets
                 for link in page_data.links:
                     self._add_url_as_target(link)
-                    
+
                 # Queue new URLs for crawling
                 for link in page_data.links:
                     if link not in self.discovered_urls:
                         self.queue.append((link, depth + 1))
                         self.discovered_urls.add(link)
                         self.stats.pages_discovered += 1
+                        # Track parent for graph analysis
+                        if link not in self.page_parents:
+                            self.page_parents[link] = url
                         
             # Also add network-discovered URLs as targets
             for url in self.network_urls:
@@ -908,7 +922,7 @@ class ProductionCrawler:
             target_findings = tester.test_target(target)
             findings.extend(target_findings)
             
-        return {
+        result = {
             "targets": self.targets,
             "findings": [f.to_dict() if hasattr(f, 'to_dict') else f for f in findings],
             "api_endpoints": list(self.api_endpoints),
@@ -924,8 +938,16 @@ class ProductionCrawler:
                 "elements_clicked": self.stats.elements_clicked,
                 "vulnerabilities_found": len(findings),
                 "errors": self.stats.errors,
+            },
+            # Include crawl graph data for DFS analysis
+            "crawl_graph": {
+                "visited_urls": list(self.visited),
+                "page_links": {k: list(v) for k, v in self.page_links.items()},
+                "page_depths": self.page_depths,
+                "page_parents": self.page_parents,
             }
         }
+        return result
 
 
 # Backwards compatibility - keep the old class name working

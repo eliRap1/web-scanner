@@ -106,8 +106,10 @@ def login(payload: LoginPayload):
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+    except Exception:
+        import logging
+        logging.getLogger("auth.login").exception("Login failure")
+        raise HTTPException(status_code=500, detail="Login failed")
     finally:
         conn.close()
 
@@ -191,8 +193,10 @@ def refresh_token(payload: RefreshPayload, request: Request):
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
+    except Exception:
+        import logging
+        logging.getLogger("auth.refresh").exception("Token refresh failure")
+        raise HTTPException(status_code=500, detail="Token refresh failed")
     finally:
         conn.close()
 

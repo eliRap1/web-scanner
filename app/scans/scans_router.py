@@ -16,11 +16,67 @@ from scanner.auth_manager import AuthenticationManager
 from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
 from db import database as db
 from typing import List, Optional, Union, Dict
+from urllib.parse import urlparse
+import ipaddress
+import socket
 import requests
 from scanner.task_queue import uuid_to_db_id
 from db.database import get_connection, get_logs_for_scan, get_scans_for_user
 
 router = APIRouter(tags=["scanner"])
+
+
+def _validate_target_url(url: str) -> str:
+    """
+    Reject URLs that would let the scanner reach internal/loopback/cloud-metadata
+    endpoints (SSRF defense). Returns the validated URL or raises HTTPException(400).
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only http:// and https:// URLs are allowed"
+        )
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="URL has no hostname")
+
+    host = parsed.hostname
+    try:
+        # Resolve all addresses to catch DNS-rebinding tricks at submit time.
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except socket.gaierror:
+        # Allow scanning of unresolved hosts (lab/CTF), but still block obvious local strings.
+        addresses = set()
+        if host.lower() in {"localhost", "metadata.google.internal"}:
+            raise HTTPException(status_code=400, detail="Target host is not allowed")
+
+    for addr in addresses:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            raise HTTPException(
+                status_code=400,
+                detail="Target resolves to a private or reserved address"
+            )
+
+    return url
+
+
+def _validate_proxy(proxy: Optional[str]) -> Optional[str]:
+    """Allow only http(s) proxies. Reject schemes like file:// gopher:// etc."""
+    if not proxy:
+        return None
+    parsed = urlparse(proxy)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="proxy must be http:// or https://")
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="proxy URL has no hostname")
+    return proxy
 
 
 @router.get("/list")
@@ -68,7 +124,8 @@ def start_scan(
     target_login_url: Optional[str] = None,
     target_username: Optional[str] = None,
     target_password: Optional[str] = None,
-    proxy: Optional[str] = None  # e.g., "http://127.0.0.1:8080" for Burp Suite
+    proxy: Optional[str] = None,  # e.g., "http://127.0.0.1:8080" for Burp Suite
+    enable_graph_analysis: bool = False  # DFS vulnerability graph analysis
 ):
     """
     Start a new vulnerability scan.
@@ -91,6 +148,12 @@ def start_scan(
     Raises:
         HTTPException 401: If user is not authenticated
     """
+    # Step 0: Validate inputs early (SSRF defense)
+    url = _validate_target_url(url)
+    proxy = _validate_proxy(proxy)
+    if target_login_url:
+        target_login_url = _validate_target_url(target_login_url)
+
     # Step 1: Handle target site authentication (if provided)
     # This allows scanning authenticated areas of the target website
     cookies_to_pass = None
@@ -113,7 +176,8 @@ def start_scan(
         max_pages=max_pages,
         cookies=cookies_to_pass,
         user_id=current_user_id,
-        proxy=proxy  # Pass proxy for Burp/ZAP integration
+        proxy=proxy,  # Pass proxy for Burp/ZAP integration
+        enable_graph_analysis=enable_graph_analysis
     )
 
     return {
@@ -230,6 +294,23 @@ def _authorize_job_access(job_id: str, request: Request) -> int:
         conn.close()
 
     return db_scan_id
+
+@router.get("/{job_id}/graph")
+def get_scan_graph(job_id: str, request: Request):
+    """
+    Get the DFS vulnerability graph analysis data for a scan.
+    Returns JSON diagram data for frontend visualization.
+    """
+    db_scan_id = _authorize_job_access(job_id, request)
+    conn = db.get_connection()
+    try:
+        graph_json = db.get_graph_data(conn, db_scan_id)
+        if not graph_json:
+            raise HTTPException(status_code=404, detail="No graph analysis data available for this scan")
+        import json
+        return json.loads(graph_json)
+    finally:
+        conn.close()
 
 @router.get("/{job_id}/vulnerabilities")
 def get_scan_vulnerabilities(job_id: str, request: Request):
