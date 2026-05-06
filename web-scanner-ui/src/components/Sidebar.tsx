@@ -1,47 +1,54 @@
-import { API_BASE } from "../api/client"
-import { useLocation } from "react-router-dom"
+import { NavLink, useNavigate } from "react-router-dom"
+import { API_BASE, clearToken, getToken } from "../api/client"
+
+const NAV_ITEMS = [
+  { to: "/", label: "Dashboard", icon: "📊", end: true },
+  { to: "/scan", label: "New Scan", icon: "🔍" },
+  { to: "/reports", label: "Reports", icon: "📄" },
+  { to: "/settings", label: "Settings", icon: "⚙️" },
+]
 
 export default function Sidebar() {
-  const location = useLocation()
+  const navigate = useNavigate()
 
   async function logout() {
-    const token = localStorage.getItem("token")
+    const token = getToken()
 
     if (token) {
-      await fetch(`${API_BASE}/logout`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      })
+      try {
+        await fetch(`${API_BASE}/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+      } catch {
+        // Best-effort: even if the server rejects, drop the token locally.
+      }
     }
 
-    localStorage.removeItem("token")
-    window.location.href = "/login"
+    clearToken()
+    navigate("/login", { replace: true })
   }
-
-  const isActive = (path: string) => location.pathname === path
 
   return (
     <div className="sidebar">
       <h2>Web Scanner</h2>
-      
+
       <nav>
-        <a href="/" className={isActive("/") ? "active" : ""}>
-          📊 Dashboard
-        </a>
-        <a href="/scan" className={isActive("/scan") ? "active" : ""}>
-          🔍 New Scan
-        </a>
-        <a href="/reports" className={isActive("/reports") ? "active" : ""}>
-          📄 Reports
-        </a>
-        <a href="/settings" className={isActive("/settings") ? "active" : ""}>
-          ⚙️ Settings
-        </a>
+        {NAV_ITEMS.map(({ to, label, icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            {icon} {label}
+          </NavLink>
+        ))}
       </nav>
-      
+
       <button className="logout" onClick={logout}>
         🚪 Logout
       </button>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
-import { API_BASE } from "../api/client"
+import { API_BASE, getGraphData } from "../api/client"
 import { Link } from "react-router-dom"
+import VulnerabilityGraph from "../components/VulnerabilityGraph"
 
 interface Report {
   report_id: number
@@ -26,6 +27,9 @@ export default function Reports() {
   const [generating, setGenerating] = useState<number | null>(null)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [graphData, setGraphData] = useState<any>(null)
+  const [graphScanId, setGraphScanId] = useState<number | null>(null)
+  const [loadingGraph, setLoadingGraph] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -113,6 +117,30 @@ export default function Reports() {
     const token = localStorage.getItem("token")
     const url = `${API_BASE}/reports/view/${reportId}?token=${token}`
     window.open(url, "_blank")
+  }
+
+  async function loadGraphData(scanId: number) {
+    if (graphScanId === scanId && graphData) {
+      setGraphData(null)
+      setGraphScanId(null)
+      return
+    }
+    setLoadingGraph(true)
+    try {
+      const data = await getGraphData(String(scanId))
+      if (data) {
+        setGraphData(data)
+        setGraphScanId(scanId)
+      } else {
+        setError("No graph analysis data available for this scan")
+        setGraphData(null)
+        setGraphScanId(null)
+      }
+    } catch {
+      setError("Failed to load graph data")
+    } finally {
+      setLoadingGraph(false)
+    }
   }
 
   function getSeverityColor(vulns: number): string {
@@ -340,6 +368,21 @@ export default function Reports() {
                             </button>
                           ) : null}
                           <button
+                            onClick={() => loadGraphData(report.scan_id)}
+                            disabled={loadingGraph}
+                            style={{
+                              padding: "8px 16px",
+                              background: graphScanId === report.scan_id ? "#6366f1" : "#2d2d3d",
+                              color: "white",
+                              border: "1px solid #3d3d4d",
+                              borderRadius: "6px",
+                              cursor: loadingGraph ? "not-allowed" : "pointer",
+                              fontSize: "14px"
+                            }}
+                          >
+                            {loadingGraph && graphScanId === report.scan_id ? "Loading..." : graphScanId === report.scan_id ? "Hide Graph" : "View Graph"}
+                          </button>
+                          <button
                             onClick={() => downloadReport(report.report_id)}
                             style={{
                               padding: "8px 16px",
@@ -426,6 +469,92 @@ export default function Reports() {
             </>
           )}
         </>
+      )}
+
+      {/* Graph Visualization */}
+      {graphData && graphScanId && (
+        <div style={{ marginTop: "30px" }}>
+          <h2 style={{ fontSize: "18px", marginBottom: "16px", color: "#9ca3af" }}>
+            Vulnerability Graph - Scan #{graphScanId}
+          </h2>
+
+          {/* Summary Cards */}
+          {graphData.summary && (
+            <div className="graph-summary-grid" style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: "12px",
+              marginBottom: "20px"
+            }}>
+              <div style={{ background: "#1e1e2e", borderRadius: "12px", padding: "16px", border: "1px solid #2d2d3d" }}>
+                <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Pages</div>
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#60a5fa" }}>{graphData.summary.total_nodes}</div>
+              </div>
+              <div style={{ background: "#1e1e2e", borderRadius: "12px", padding: "16px", border: "1px solid #2d2d3d" }}>
+                <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Links</div>
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#22c55e" }}>{graphData.summary.total_edges}</div>
+              </div>
+              <div style={{ background: "#1e1e2e", borderRadius: "12px", padding: "16px", border: "1px solid #2d2d3d" }}>
+                <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Cycles</div>
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: graphData.summary.total_cycles > 0 ? "#ef4444" : "#22c55e" }}>
+                  {graphData.summary.total_cycles}
+                </div>
+              </div>
+              <div style={{ background: "#1e1e2e", borderRadius: "12px", padding: "16px", border: "1px solid #2d2d3d" }}>
+                <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Clusters</div>
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#eab308" }}>{graphData.summary.total_clusters}</div>
+              </div>
+              <div style={{ background: "#1e1e2e", borderRadius: "12px", padding: "16px", border: "1px solid #2d2d3d" }}>
+                <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Vulns</div>
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: graphData.summary.total_vulnerabilities > 0 ? "#ef4444" : "#22c55e" }}>
+                  {graphData.summary.total_vulnerabilities}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <VulnerabilityGraph data={graphData} width={1000} height={650} />
+
+          {/* Clusters */}
+          {graphData.clusters && graphData.clusters.length > 0 && (
+            <div style={{ marginTop: "20px" }}>
+              <h3 style={{ fontSize: "16px", marginBottom: "12px", color: "#9ca3af" }}>
+                Vulnerability Clusters
+              </h3>
+              <div style={{ display: "grid", gap: "12px" }}>
+                {graphData.clusters.map((cluster: any, i: number) => (
+                  <div key={i} style={{
+                    background: "#1e1e2e",
+                    borderRadius: "12px",
+                    padding: "16px 20px",
+                    border: "1px solid #2d2d3d"
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: "8px" }}>
+                      {cluster.vuln_type}
+                      <span style={{ color: "#6b7280", fontWeight: 400, marginLeft: "8px" }}>
+                        ({cluster.total_findings} findings across {cluster.urls.length} pages)
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {cluster.urls.map((url: string, j: number) => (
+                        <span key={j} style={{
+                          padding: "4px 8px",
+                          background: "#2d2d3d",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          fontFamily: "monospace",
+                          color: "#60a5fa"
+                        }}>
+                          {url}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

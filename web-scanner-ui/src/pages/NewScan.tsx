@@ -38,6 +38,7 @@ export default function NewScan() {
   const [targetUsername, setTargetUsername] = useState("")
   const [targetPassword, setTargetPassword] = useState("")
   const [proxy, setProxy] = useState("")  // e.g., "http://127.0.0.1:8080" for Burp
+  const [enableGraphAnalysis, setEnableGraphAnalysis] = useState(false)
 
   const [jobId, setJobId] = useState<string | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
@@ -70,7 +71,8 @@ export default function NewScan() {
         target_login_url: targetLoginUrl,
         target_username: targetUsername,
         target_password: targetPassword,
-        ...(proxy && { proxy })  // Only include if set
+        ...(proxy && { proxy }),  // Only include if set
+        ...(enableGraphAnalysis && { enable_graph_analysis: "true" })
       })
 
       const res = await fetch(`${API_BASE}/scan/?${params}`, {
@@ -244,6 +246,27 @@ export default function NewScan() {
               value={targetPassword}
               onChange={e => setTargetPassword(e.target.value)}
             />
+          </div>
+        </div>
+      </div>
+
+      {/* DFS Graph Analysis */}
+      <div className="scan-section">
+        <div
+          className={`dfs-toggle-section ${enableGraphAnalysis ? "enabled" : ""}`}
+          onClick={() => setEnableGraphAnalysis(!enableGraphAnalysis)}
+        >
+          <div className="dfs-toggle-switch">
+            <div className="dfs-toggle-track" />
+            <div className="dfs-toggle-thumb" />
+          </div>
+          <div className="dfs-toggle-content">
+            <h4>Vulnerability Graph Analysis (DFS)</h4>
+            <p>
+              Build a directed graph of crawled pages and run DFS to detect cycles,
+              identify vulnerability clusters, and generate an interactive diagram
+              in the scan report.
+            </p>
           </div>
         </div>
       </div>
