@@ -1,6 +1,61 @@
+# --- Python ---
 __pycache__/
-*.pyc
-__pycache__/
-*.pyc
-__pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# --- Node / Vite ---
+node_modules/
+dist/
+.vite/
+*.local
+.eslintcache
+
+# --- Editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Project artifacts ---
+# Local SQLite database (created on first run)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+app/web_scanner.db
+web_scanner.db
+
+# Generated reports
+reports/
+!reports/.gitkeep
+
+# Scratch / scraped data
+results.json
+issues.json
+gitlab_*.json
+
+# Local env overrides
+.env
+.env.local
+.env.*.local
+
+# Playwright artefacts
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Misc
+pytest-cache-files-*
