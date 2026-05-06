@@ -7,13 +7,11 @@ import os
 try:
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    USING_BCRYPT = True
-except ImportError:
-    import hashlib
-    import secrets
-    pwd_context = None
-    USING_BCRYPT = False
-    logging.warning("passlib not installed. Using SHA-256. Install bcrypt: pip install passlib[bcrypt]") # register works on bcrypt
+except ImportError as exc:  # pragma: no cover - hard requirement at runtime
+    raise RuntimeError(
+        "passlib[bcrypt] is required for password hashing. "
+        "Install with: pip install 'passlib[bcrypt]'"
+    ) from exc
 
 # Allow overriding DB path for tests / different environments
 # Example: WEB_SCANNER_DB=/tmp/test.db
@@ -265,7 +263,7 @@ def init_database():
     """Initialize database with proper error handling and logging"""
     logger.info(f"Initializing database: {DB_NAME}")
     logger.info(f"Current directory: {os.getcwd()}")
-    logger.info(f"Using password hashing: {'bcrypt' if USING_BCRYPT else 'SHA-256'}")
+    logger.info("Using password hashing: bcrypt")
     
     try:
         conn = get_connection()
@@ -330,46 +328,16 @@ def can_access_report(user_role: str, user_id: int, report_user_id: int) -> bool
 # Password Hashing Utilities
 # -------------------------------
 def hash_password(password: str) -> str:
-    """
-    Hash a password using bcrypt (preferred) or SHA-256 with salt (fallback).
-    """
-    if USING_BCRYPT:
-        return pwd_context.hash(password)
-    else:
-        # Fallback to SHA-256
-        import secrets
-        import hashlib
-        salt = secrets.token_hex(16)
-        pwd_hash = hashlib.sha256((salt + password).encode()).hexdigest()
-        return f"sha256${salt}${pwd_hash}"
+    """Hash a password with bcrypt."""
+    return pwd_context.hash(password)
+
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    """
-    Verify a password against its stored hash.
-    Supports both bcrypt and SHA-256 formats.
-    """
-    if USING_BCRYPT and not stored_hash.startswith("sha256$"):
-        # Try bcrypt verification
-        try:
-            return pwd_context.verify(password, stored_hash)
-        except Exception:
-            pass
-    
-    # Try SHA-256 format
-    if stored_hash.startswith("sha256$"):
-        try:
-            _, salt, pwd_hash = stored_hash.split('$')
-            import hashlib
-            return hashlib.sha256((salt + password).encode()).hexdigest() == pwd_hash
-        except Exception:
-            return False
-    
-    # Legacy format (salt$hash without prefix)
+    """Verify a password against its bcrypt hash."""
     try:
-        salt, pwd_hash = stored_hash.split('$')
-        import hashlib
-        return hashlib.sha256((salt + password).encode()).hexdigest() == pwd_hash
+        return pwd_context.verify(password, stored_hash)
     except Exception:
+        logger.exception("Password verification error")
         return False
 
 # -------------------------------
@@ -746,8 +714,19 @@ def fastapi_requires_permission(permission: str):
 # ---------------------------------------
 # Utility Functions
 # ---------------------------------------
+DEFAULT_ADMIN_USERNAME = os.environ.get("WEB_SCANNER_ADMIN_USERNAME", "admin")
+DEFAULT_ADMIN_EMAIL = os.environ.get("WEB_SCANNER_ADMIN_EMAIL", "admin@example.com")
+
+
 def ensure_admin_exists():
-    """Create default admin user if none exists (for development only)."""
+    """
+    Create the default admin user on first start if one does not exist.
+
+    The admin password MUST be supplied via the WEB_SCANNER_ADMIN_PASSWORD
+    environment variable. To boot a throwaway dev instance without setting one,
+    set WEB_SCANNER_DEV=1 explicitly — the dev fallback is never used in
+    production and prints a loud warning.
+    """
     logger.info("Checking for admin user...")
     conn = get_connection()
     try:
@@ -756,12 +735,33 @@ def ensure_admin_exists():
         if r:
             logger.info(f"Admin user already exists (ID: {r[0]})")
             return
-        
-        logger.info("Creating default admin user...")
-        user_id = create_user(conn, username="admin", email="admin@example.com", password="Admin@123", role="admin")
-        logger.warning(f"Created default admin user (ID: {user_id}, username=admin, password=Admin@123) - CHANGE THIS PASSWORD!")
-    except Exception as e:
-        logger.error(f"Error ensuring admin exists: {e}")
+
+        admin_password = os.environ.get("WEB_SCANNER_ADMIN_PASSWORD")
+        if not admin_password:
+            if os.environ.get("WEB_SCANNER_DEV") == "1":
+                admin_password = "Admin@123"
+                logger.warning(
+                    "WEB_SCANNER_DEV=1 set: bootstrapping with insecure default admin password. "
+                    "DO NOT USE IN PRODUCTION."
+                )
+            else:
+                raise RuntimeError(
+                    "No admin user exists and WEB_SCANNER_ADMIN_PASSWORD is not set. "
+                    "Set the env var (recommended) or pass WEB_SCANNER_DEV=1 to use the "
+                    "insecure dev default."
+                )
+
+        logger.info("Creating admin user from environment configuration...")
+        user_id = create_user(
+            conn,
+            username=DEFAULT_ADMIN_USERNAME,
+            email=DEFAULT_ADMIN_EMAIL,
+            password=admin_password,
+            role="admin",
+        )
+        logger.info(f"Created admin user (ID: {user_id}, username={DEFAULT_ADMIN_USERNAME})")
+    except Exception:
+        logger.exception("Error ensuring admin exists")
         raise
     finally:
         conn.close()
@@ -870,7 +870,7 @@ if __name__ == "__main__":
     print("="*60)
     print(f"Database file: {DB_NAME}")
     print(f"Current directory: {os.getcwd()}")
-    print(f"Password hashing: {'bcrypt' if USING_BCRYPT else 'SHA-256'}")
+    print("Password hashing: bcrypt")
     print()
     
     try:

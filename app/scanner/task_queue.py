@@ -41,8 +41,35 @@ MAX_RETRIES = 2
 JOB_TIMEOUT_SECONDS = 600          # 10 minutes - vulnerability testing can take a while
 WATCHDOG_INTERVAL_SECONDS = 10     # how often to check running jobs
 
-# Global Map to link UUID -> Integer Database ID
+# Global Map to link UUID -> Integer Database ID.
+# Old entries are pruned by `_prune_finished_jobs` once a job's status is
+# completed/failed and a TTL passes — keeps in-memory state bounded.
 uuid_to_db_id = {}
+
+# Per-job cancel events. Watchdog flips the event when a job exceeds its timeout
+# so the scanner thread can wind down cooperatively (close the browser, etc.).
+job_cancel_events: dict[str, threading.Event] = {}
+
+# How long to keep finished jobs in memory before pruning their bookkeeping.
+JOB_RETAIN_SECONDS = 3600  # 1 hour
+_finished_at: dict[str, float] = {}
+
+
+def _prune_finished_jobs():
+    """Drop in-memory state for jobs that finished more than JOB_RETAIN_SECONDS ago."""
+    cutoff = time.time() - JOB_RETAIN_SECONDS
+    with job_lock:
+        stale = [j for j, t in _finished_at.items() if t < cutoff]
+        for j in stale:
+            _finished_at.pop(j, None)
+            job_status.pop(j, None)
+            job_results.pop(j, None)
+            job_progress.pop(j, None)
+            job_attempts.pop(j, None)
+            uuid_to_db_id.pop(j, None)
+            job_cancel_events.pop(j, None)
+        if stale:
+            logger.info(f"Pruned in-memory state for {len(stale)} finished job(s)")
 
 
 def recover_stuck_scans_on_startup():
@@ -72,6 +99,10 @@ def recover_stuck_scans_on_startup():
 def watchdog_loop():
     """
     Feature 4.7: Watchdog that fails jobs stuck in 'running' for too long.
+
+    Flipping the cancel event first lets the scanner thread close its Playwright
+    browser and tear down workers cleanly; we only mark the job failed in the
+    DB after the cooperative cancel signal has been raised.
     """
     logger.info("Watchdog started.")
     while True:
@@ -86,8 +117,12 @@ def watchdog_loop():
                         to_fail.append(job_id)
 
         for job_id in to_fail:
+            evt = job_cancel_events.get(job_id)
+            if evt is not None:
+                evt.set()
             set_job_failure(job_id, f"Timeout: scan exceeded {JOB_TIMEOUT_SECONDS} seconds")
-    
+
+        _prune_finished_jobs()
         time.sleep(WATCHDOG_INTERVAL_SECONDS)
 
 
@@ -391,6 +426,9 @@ def process_jobs():
 
             # Build scanner (import here to avoid circular imports)
             from scanner.engine import WebScanner
+            cancel_event = threading.Event()
+            with job_lock:
+                job_cancel_events[job_uuid] = cancel_event
             scanner = WebScanner(
                 url=job["url"],
                 max_pages=job["max_pages"],
@@ -398,7 +436,8 @@ def process_jobs():
                 proxy=job.get("proxy"),  # Proxy for Burp/ZAP integration
                 db_scan_id=db_scan_id,
                 job_id=job_uuid,
-                callback=update_progress
+                callback=update_progress,
+                cancel_event=cancel_event,
             )
 
             # --- Feature 4.7: enforce timeout around scan() ---
@@ -461,6 +500,13 @@ def process_jobs():
         except Exception as e:
             logger.exception(f"Job {job_uuid} failed.")
             set_job_failure(job_uuid, str(e))
+
+        finally:
+            # Mark the job for retention-window pruning. Cancel event is dropped
+            # immediately because watchdog will skip jobs that aren't running.
+            with job_lock:
+                _finished_at[job_uuid] = time.time()
+                job_cancel_events.pop(job_uuid, None)
 
         job_queue.task_done()
 

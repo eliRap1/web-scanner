@@ -30,35 +30,8 @@ generator = ReportGenerator()
 
 
 def get_user_from_request_or_token(request: Request, token: Optional[str] = None):
-    """
-    Get authenticated user from request or validate token from query parameter.
-
-    This function supports two authentication methods:
-    1. Standard middleware authentication (request.state.user)
-    2. Token passed as query parameter (for window.open() links)
-
-    Args:
-        request: FastAPI Request object
-        token: Optional token from query parameter
-
-    Returns:
-        dict or None: User info if authenticated, None otherwise
-    """
-    # First try request.state.user (set by middleware)
-    user = getattr(request.state, 'user', None)
-    if user:
-        return user
-
-    # Fallback: validate token from query parameter (for download/view links)
-    if token:
-        conn = db.get_connection()
-        try:
-            user = db.validate_session(conn, token)
-            return user
-        finally:
-            conn.close()
-
-    return None
+    """Backward-compat helper. Now defers entirely to middleware (no query token)."""
+    return getattr(request.state, "user", None)
 
 
 @router.get("/")
@@ -175,9 +148,9 @@ def generate_report(
 
 
 @router.get("/download/{report_id}")
-def download_report(report_id: int, request: Request, token: Optional[str] = Query(default=None)):
-    """Download a generated report."""
-    user = get_user_from_request_or_token(request, token)
+def download_report(report_id: int, request: Request):
+    """Download a generated report. Requires Authorization: Bearer <token>."""
+    user = getattr(request.state, "user", None)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -213,9 +186,9 @@ def download_report(report_id: int, request: Request, token: Optional[str] = Que
 
 
 @router.get("/view/{report_id}")
-def view_report(report_id: int, request: Request, token: Optional[str] = Query(default=None)):
-    """View a report inline (HTML only)."""
-    user = get_user_from_request_or_token(request, token)
+def view_report(report_id: int, request: Request):
+    """View a report inline (HTML only). Requires Authorization: Bearer <token>."""
+    user = getattr(request.state, "user", None)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 

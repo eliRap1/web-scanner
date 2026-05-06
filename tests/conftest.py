@@ -20,6 +20,9 @@ def temp_db(tmp_path: Path, monkeypatch):
 
     # Must set env BEFORE importing database/login/register modules
     monkeypatch.setenv("WEB_SCANNER_DB", str(db_path))
+    # Allow ensure_admin_exists() to bootstrap a default admin in tests without
+    # requiring a real WEB_SCANNER_ADMIN_PASSWORD value.
+    monkeypatch.setenv("WEB_SCANNER_DEV", "1")
 
     import db.database as database
     importlib.reload(database)

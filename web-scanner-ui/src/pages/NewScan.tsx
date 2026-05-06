@@ -65,31 +65,36 @@ export default function NewScan() {
 
     try {
       const token = localStorage.getItem("token")
-      const params = new URLSearchParams({
+      // Body-only credentials: never end up in URL / access logs.
+      const body: Record<string, unknown> = {
         url,
-        max_pages: String(maxPages),
-        target_login_url: targetLoginUrl,
-        target_username: targetUsername,
-        target_password: targetPassword,
-        ...(proxy && { proxy }),  // Only include if set
-        ...(enableGraphAnalysis && { enable_graph_analysis: "true" })
-      })
+        max_pages: maxPages,
+        enable_graph_analysis: enableGraphAnalysis,
+      }
+      if (targetLoginUrl) body.target_login_url = targetLoginUrl
+      if (targetUsername) body.target_username = targetUsername
+      if (targetPassword) body.target_password = targetPassword
+      if (proxy) body.proxy = proxy
 
-      const res = await fetch(`${API_BASE}/scan/?${params}`, {
+      const res = await fetch(`${API_BASE}/scan/`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
 
-      if (data.job_id) {
+      if (res.ok && data.job_id) {
         setJobId(data.job_id)
         pollForResult(data.job_id)
       } else {
         setError(data.detail || "Failed to start scan")
         setLoading(false)
       }
-    } catch (err) {
+    } catch {
       setError("Network error")
       setLoading(false)
     }

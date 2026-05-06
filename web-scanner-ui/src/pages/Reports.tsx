@@ -89,34 +89,63 @@ export default function Reports() {
         setSuccess(`${format.toUpperCase()} report generated successfully!`)
         await fetchData()
 
-        // Auto-open the report in a new tab
         if (data.report_id) {
-          // Use /view for HTML, /download for PDF/JSON
-          const endpoint = format === "html" ? "view" : "download"
-          const url = `${API_BASE}/reports/${endpoint}/${data.report_id}?token=${token}`
-          window.open(url, "_blank")
+          if (format === "html") {
+            await viewReport(data.report_id)
+          } else {
+            await downloadReport(data.report_id)
+          }
         }
       } else {
         setError(data.detail || "Failed to generate report")
       }
-    } catch (err) {
+    } catch {
       setError("Network error while generating report")
     } finally {
       setGenerating(null)
     }
   }
 
-  function downloadReport(reportId: number) {
+  /**
+   * Fetch a report with the bearer token in the Authorization header so the JWT
+   * never lands in the URL (and therefore never in browser history, referer
+   * headers, or web server access logs).
+   */
+  async function fetchReportBlob(path: string): Promise<Blob | null> {
     const token = localStorage.getItem("token")
-    // Create a hidden link and click it to trigger download
-    const url = `${API_BASE}/reports/download/${reportId}?token=${token}`
-    window.open(url, "_blank")
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      setError(res.status === 404 ? "Report file not found" : `Failed to load report (${res.status})`)
+      return null
+    }
+    return res.blob()
   }
 
-  function viewReport(reportId: number) {
-    const token = localStorage.getItem("token")
-    const url = `${API_BASE}/reports/view/${reportId}?token=${token}`
-    window.open(url, "_blank")
+  async function downloadReport(reportId: number) {
+    const blob = await fetchReportBlob(`/reports/download/${reportId}`)
+    if (!blob) return
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = objectUrl
+    a.download = `report-${reportId}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Revoke after the click handler has had a chance to start the download.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000)
+  }
+
+  async function viewReport(reportId: number) {
+    const blob = await fetchReportBlob(`/reports/view/${reportId}`)
+    if (!blob) return
+    const objectUrl = URL.createObjectURL(blob)
+    const w = window.open(objectUrl, "_blank")
+    if (!w) {
+      setError("Popup blocked — allow popups to view the report.")
+    }
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
   }
 
   async function loadGraphData(scanId: number) {

@@ -33,14 +33,14 @@ PUBLIC_PATHS = {
     "/meta.json",     # Frontend metadata file
 }
 
-# Prefixes for paths that don't require authentication
-# These endpoints handle their own token validation via query parameter
+# Prefixes for paths that don't require authentication.
+# Reports view/download endpoints used to live here when the SPA passed the
+# token via query string; they now require a normal Authorization header so the
+# bearer token never lands in URLs / access logs / referer chains.
 PUBLIC_PREFIXES = (
     "/docs",
     "/openapi",
     "/redoc",
-    "/reports/view",      # Report viewing (validates token from query param)
-    "/reports/download",  # Report download (validates token from query param)
 )
 
 

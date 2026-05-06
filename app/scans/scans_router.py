@@ -10,7 +10,8 @@ This module provides endpoints for:
 All endpoints require authentication via Bearer token.
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Body
+from pydantic import BaseModel, Field
 from scanner.models import ScanTarget
 from scanner.auth_manager import AuthenticationManager
 from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
@@ -24,6 +25,18 @@ from scanner.task_queue import uuid_to_db_id
 from db.database import get_connection, get_logs_for_scan, get_scans_for_user
 
 router = APIRouter(tags=["scanner"])
+
+
+class StartScanRequest(BaseModel):
+    """Body schema for POST /scan/ — credentials must be in the body, never the URL."""
+
+    url: str = Field(..., description="Target URL (http/https)")
+    max_pages: int = Field(default=30, ge=1, le=500)
+    target_login_url: Optional[str] = None
+    target_username: Optional[str] = None
+    target_password: Optional[str] = None
+    proxy: Optional[str] = None
+    enable_graph_analysis: bool = False
 
 
 def _validate_target_url(url: str) -> str:
@@ -117,73 +130,56 @@ def list_scans(request: Request):
 
 
 @router.post("/")
-def start_scan(
-    request: Request,
-    url: str,
-    max_pages: int = 30,
-    target_login_url: Optional[str] = None,
-    target_username: Optional[str] = None,
-    target_password: Optional[str] = None,
-    proxy: Optional[str] = None,  # e.g., "http://127.0.0.1:8080" for Burp Suite
-    enable_graph_analysis: bool = False  # DFS vulnerability graph analysis
-):
+def start_scan(request: Request, payload: StartScanRequest = Body(...)):
     """
-    Start a new vulnerability scan.
+    Queue a new vulnerability scan.
 
-    This endpoint queues a new scan job for the specified URL. The scan runs
-    asynchronously in a background worker thread. Use the returned job_id to
-    poll for status and results.
+    The request body carries the target URL, optional target-site credentials,
+    and scan options. Credentials are never accepted as query-string parameters
+    so they don't end up in access logs / browser history.
 
-    Args:
-        request: FastAPI request (contains authenticated user)
-        url: Target URL to scan (must be a valid http/https URL)
-        max_pages: Maximum number of pages to crawl (default: 30)
-        target_login_url: Optional login URL for authenticated scanning
-        target_username: Optional username for target site authentication
-        target_password: Optional password for target site authentication
+    Returns ``{job_id, status, message}``. Poll ``/scan/{job_id}/progress`` for
+    real-time updates and ``/scan/{job_id}`` once status is ``completed``.
 
-    Returns:
-        dict: Contains job_id (UUID) for tracking, status, and message
-
-    Raises:
-        HTTPException 401: If user is not authenticated
+    Raises 400 on URL/proxy validation failure, 401 if unauthenticated.
     """
     # Step 0: Validate inputs early (SSRF defense)
-    url = _validate_target_url(url)
-    proxy = _validate_proxy(proxy)
-    if target_login_url:
-        target_login_url = _validate_target_url(target_login_url)
+    url = _validate_target_url(payload.url)
+    proxy = _validate_proxy(payload.proxy)
+    target_login_url = (
+        _validate_target_url(payload.target_login_url)
+        if payload.target_login_url else None
+    )
 
     # Step 1: Handle target site authentication (if provided)
-    # This allows scanning authenticated areas of the target website
     cookies_to_pass = None
-    if target_username and target_password and target_login_url:
+    if payload.target_username and payload.target_password and target_login_url:
         auth_manager = AuthenticationManager()
-        login_session = auth_manager.login(target_login_url, target_username, target_password)
-
+        login_session = auth_manager.login(
+            target_login_url, payload.target_username, payload.target_password
+        )
         if login_session:
             cookies_to_pass = requests.utils.dict_from_cookiejar(login_session.cookies)
 
     # Step 2: Verify the requesting user is authenticated
     current_user_id = request.state.user["user_id"] if request.state.user else None
-
     if not current_user_id:
         raise HTTPException(status_code=401, detail="User must be logged in to start a scan.")
 
     # Step 3: Queue the scan job for background processing
     job_id = add_job(
         url=url,
-        max_pages=max_pages,
+        max_pages=payload.max_pages,
         cookies=cookies_to_pass,
         user_id=current_user_id,
-        proxy=proxy,  # Pass proxy for Burp/ZAP integration
-        enable_graph_analysis=enable_graph_analysis
+        proxy=proxy,
+        enable_graph_analysis=payload.enable_graph_analysis,
     )
 
     return {
         "job_id": job_id,
         "status": "queued",
-        "message": "Scan queued. Poll /scan/{job_id}/progress for real-time updates."
+        "message": "Scan queued. Poll /scan/{job_id}/progress for real-time updates.",
     }
 
 

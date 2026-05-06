@@ -21,6 +21,7 @@ import re
 import time
 import json
 import logging
+import threading
 from collections import deque
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 from typing import Optional, Set, List, Dict, Any, Callable
@@ -32,6 +33,10 @@ from scanner.scope import is_in_scope, normalize_url
 from db.database import get_connection, insert_log
 
 logger = logging.getLogger(__name__)
+
+
+class ScanCancelled(Exception):
+    """Raised inside the scanner when a watchdog/cancel signal is observed."""
 
 
 @dataclass
@@ -152,6 +157,10 @@ class ProductionCrawler:
         max_scroll_attempts: int = 5,
         # Proxy support for Burp/ZAP integration
         proxy: Optional[str] = None,  # e.g., "http://127.0.0.1:8080"
+        # Cooperative cancel signal — flipped by the worker watchdog when a
+        # scan exceeds its timeout. The crawler checks it between pages and
+        # the vulnerability tester checks it between targets.
+        cancel_event: Optional[threading.Event] = None,
     ):
         # BACKWARDS COMPATIBILITY: accept either 'url' or 'start_url'
         if start_url is None and url is None:
@@ -165,6 +174,7 @@ class ProductionCrawler:
         self.job_id = job_id
         self.db_scan_id = db_scan_id
         self.callback = callback
+        self.cancel_event = cancel_event or threading.Event()
         
         # Feature flags
         self.intercept_network = intercept_network
@@ -791,15 +801,20 @@ class ProductionCrawler:
             self.targets.append(target)
             self.seen_targets.add(sig)
 
+    def _check_cancelled(self):
+        """Raise ScanCancelled if the watchdog flipped the cancel event."""
+        if self.cancel_event.is_set():
+            raise ScanCancelled("scan cancelled by watchdog")
+
     def scan(self) -> Dict[str, Any]:
         """
         Main scan method.
-        
+
         Returns:
             Dictionary with targets, findings, api_endpoints, and stats
         """
         self._log("info", f"Starting production crawl of {self.start_url}")
-        
+
         with sync_playwright() as p:
             # Configure browser launch options (proxy at browser level for all contexts)
             launch_options = {"headless": True}
@@ -808,100 +823,106 @@ class ProductionCrawler:
                 self._log("info", f"Using proxy: {self.proxy}")
 
             browser = p.chromium.launch(**launch_options)
-            context = browser.new_context(
-                ignore_https_errors=True,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            
-            # Inject cookies if provided
-            if self.cookies:
-                cookie_list = []
-                for name, value in self.cookies.items():
-                    cookie_list.append({
-                        "name": name,
-                        "value": value,
-                        "domain": self.base_domain,
-                        "path": "/"
-                    })
-                context.add_cookies(cookie_list)
-                
-            # Fetch sitemap and robots.txt first
-            if self.fetch_sitemap:
-                sitemap_urls = self._fetch_sitemap(context)
-                robots_urls = self._fetch_robots_txt(context)
-                
-                for url in sitemap_urls | robots_urls:
+            try:
+                context = browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+
+                # Inject cookies if provided
+                if self.cookies:
+                    cookie_list = []
+                    for name, value in self.cookies.items():
+                        cookie_list.append({
+                            "name": name,
+                            "value": value,
+                            "domain": self.base_domain,
+                            "path": "/"
+                        })
+                    context.add_cookies(cookie_list)
+
+                # Fetch sitemap and robots.txt first
+                if self.fetch_sitemap:
+                    sitemap_urls = self._fetch_sitemap(context)
+                    robots_urls = self._fetch_robots_txt(context)
+
+                    for url in sitemap_urls | robots_urls:
+                        if url not in self.discovered_urls:
+                            self.queue.append((url, 1))
+                            self.discovered_urls.add(url)
+
+                # Create main page for crawling
+                page = context.new_page()
+
+                # Set up network interception
+                if self.intercept_network:
+                    self._setup_network_interception(page)
+
+                # BFS crawl
+                while self.queue and len(self.visited) < self.max_pages:
+                    self._check_cancelled()
+                    url, depth = self.queue.popleft()
+
+                    # Skip if already visited or too deep
+                    if url in self.visited:
+                        continue
+                    if depth > self.max_depth:
+                        continue
+
+                    self.visited.add(url)
+                    self.stats.pages_visited += 1
+
+                    # Track depth and parent for graph analysis
+                    self.page_depths[url] = depth
+
+                    # Report progress
+                    self._report_progress(current_url=url, depth=depth)
+                    self._log("info", f"Crawling [{len(self.visited)}/{self.max_pages}]: {url}")
+
+                    # Crawl the page
+                    page_data = self._crawl_page(page, url, depth)
+
+                    # Track outgoing links for graph analysis
+                    self.page_links[url] = set(page_data.links)
+
+                    # Add forms as targets
+                    for form in page_data.forms:
+                        self._add_form_as_target(form)
+
+                    # Add URLs with parameters as targets
+                    for link in page_data.links:
+                        self._add_url_as_target(link)
+
+                    # Queue new URLs for crawling
+                    for link in page_data.links:
+                        if link not in self.discovered_urls:
+                            self.queue.append((link, depth + 1))
+                            self.discovered_urls.add(link)
+                            self.stats.pages_discovered += 1
+                            # Track parent for graph analysis
+                            if link not in self.page_parents:
+                                self.page_parents[link] = url
+
+                # Also add network-discovered URLs as targets
+                for url in self.network_urls:
+                    self._add_url_as_target(url)
                     if url not in self.discovered_urls:
-                        self.queue.append((url, 1))
                         self.discovered_urls.add(url)
-                        
-            # Create main page for crawling
-            page = context.new_page()
-            
-            # Set up network interception
-            if self.intercept_network:
-                self._setup_network_interception(page)
-                
-            # BFS crawl
-            while self.queue and len(self.visited) < self.max_pages:
-                url, depth = self.queue.popleft()
-                
-                # Skip if already visited or too deep
-                if url in self.visited:
-                    continue
-                if depth > self.max_depth:
-                    continue
-                    
-                self.visited.add(url)
-                self.stats.pages_visited += 1
+            finally:
+                # Always close the browser, even if cancelled or crashed mid-crawl.
+                try:
+                    browser.close()
+                except Exception:
+                    logger.exception("Failed to close browser during scan teardown")
 
-                # Track depth and parent for graph analysis
-                self.page_depths[url] = depth
-
-                # Report progress
-                self._report_progress(current_url=url, depth=depth)
-                self._log("info", f"Crawling [{len(self.visited)}/{self.max_pages}]: {url}")
-
-                # Crawl the page
-                page_data = self._crawl_page(page, url, depth)
-
-                # Track outgoing links for graph analysis
-                self.page_links[url] = set(page_data.links)
-
-                # Add forms as targets
-                for form in page_data.forms:
-                    self._add_form_as_target(form)
-
-                # Add URLs with parameters as targets
-                for link in page_data.links:
-                    self._add_url_as_target(link)
-
-                # Queue new URLs for crawling
-                for link in page_data.links:
-                    if link not in self.discovered_urls:
-                        self.queue.append((link, depth + 1))
-                        self.discovered_urls.add(link)
-                        self.stats.pages_discovered += 1
-                        # Track parent for graph analysis
-                        if link not in self.page_parents:
-                            self.page_parents[link] = url
-                        
-            # Also add network-discovered URLs as targets
-            for url in self.network_urls:
-                self._add_url_as_target(url)
-                if url not in self.discovered_urls:
-                    self.discovered_urls.add(url)
-                    
-            browser.close()
-            
         # Update final stats
         self.stats.api_endpoints_found = len(self.api_endpoints)
-        
+
         self._log("info", f"Crawl complete. Visited: {self.stats.pages_visited}, "
                   f"Discovered: {self.stats.pages_discovered}, "
                   f"Targets: {len(self.targets)}, "
                   f"APIs: {len(self.api_endpoints)}")
-        
+
         # Run vulnerability tests
         from scanner.vulnerability_tester import VulnerabilityTester
 
@@ -911,9 +932,10 @@ class ProductionCrawler:
             confirm_findings=True,
             proxy=self.proxy  # Pass proxy for Burp/ZAP integration
         )
-        
+
         findings = []
         for i, target in enumerate(self.targets):
+            self._check_cancelled()
             self._report_progress(
                 phase="testing",
                 testing_progress=f"{i+1}/{len(self.targets)}",
@@ -921,7 +943,7 @@ class ProductionCrawler:
             )
             target_findings = tester.test_target(target)
             findings.extend(target_findings)
-            
+
         result = {
             "targets": self.targets,
             "findings": [f.to_dict() if hasattr(f, 'to_dict') else f for f in findings],

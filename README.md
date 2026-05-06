@@ -144,21 +144,23 @@ UI at `http://localhost:5173`.
 
 ### First login
 
-On first start the backend creates an admin account if none exists. Change the credentials immediately and never deploy with the defaults.
-
-```
-Username: admin
-Password: Admin@123
-```
-
-> **Important:** rotate this password before exposing the API to any network.
+The backend bootstraps an admin account on first start. Set
+`WEB_SCANNER_ADMIN_PASSWORD` (and optionally `WEB_SCANNER_ADMIN_USERNAME` / `..._EMAIL`)
+before launching — the server refuses to start without one. For a throwaway dev
+instance you can set `WEB_SCANNER_DEV=1` to use the insecure default
+`admin / Admin@123`; never do this in production.
 
 ### Environment variables
 
-| Variable           | Where    | Purpose                                   |
-| ------------------ | -------- | ----------------------------------------- |
-| `WEB_SCANNER_DB`   | backend  | Override SQLite path (used by tests too)  |
-| `VITE_API_URL`     | frontend | API base URL for the SPA                  |
+| Variable                        | Where    | Purpose                                                       |
+| ------------------------------- | -------- | ------------------------------------------------------------- |
+| `WEB_SCANNER_DB`                | backend  | Override SQLite path (used by tests too)                      |
+| `WEB_SCANNER_ADMIN_PASSWORD`    | backend  | Required to bootstrap the first admin (or set `WEB_SCANNER_DEV=1` for the insecure dev default) |
+| `WEB_SCANNER_ADMIN_USERNAME`    | backend  | Override default admin username (`admin`)                     |
+| `WEB_SCANNER_ADMIN_EMAIL`       | backend  | Override default admin email                                  |
+| `WEB_SCANNER_DEV`               | backend  | Set to `1` to allow the insecure default admin password (dev only) |
+| `ALLOWED_ORIGINS`               | backend  | Comma-separated CORS allowlist (default: localhost:5173)      |
+| `VITE_API_URL`                  | frontend | API base URL for the SPA                                      |
 
 ---
 
@@ -207,7 +209,7 @@ web-scanner/
 | POST   | `/logout`                         | Revoke token                               |
 | GET    | `/verify`                         | Token introspection                        |
 | GET    | `/scan/list`                      | List scans (RBAC-filtered)                 |
-| POST   | `/scan/`                          | Start scan (URL-validated, SSRF-guarded)   |
+| POST   | `/scan/`                          | Start scan (JSON body, URL-validated, SSRF-guarded) |
 | GET    | `/scan/{job_id}`                  | Final result                               |
 | GET    | `/scan/{job_id}/progress`         | Real-time progress                         |
 | GET    | `/scan/{job_id}/logs`             | Persisted log stream                       |
@@ -225,9 +227,12 @@ Full schema is browsable at `/docs` (Swagger) and `/redoc` once the backend is r
 ## Engineering Notes
 
 - **SSRF defense** — `/scan/` resolves the target host and rejects any address that lands in loopback / private / link-local / multicast / reserved space, plus blocks well-known metadata hostnames. Proxy URLs are restricted to `http(s)`.
+- **Credentials never in URLs** — scan-target credentials are accepted only via the JSON body; the JWT for report download/view is sent in the `Authorization` header (the SPA fetches the file as a Blob and serves it locally), so tokens never appear in browser history, referer chains, or access logs.
+- **Cooperative cancellation** — the watchdog flips a `threading.Event` before failing a stuck job; the crawler checks it between pages and the tester between targets, so Playwright shuts down cleanly instead of leaking a browser process.
+- **Thread-safe payload runner** — the vulnerability tester's parallel mode uses a per-thread `requests.Session` (via `threading.local`); no shared state is mutated from multiple workers.
+- **Bcrypt-only password storage** — the legacy SHA-256 fallback path is removed; missing `passlib[bcrypt]` is a hard startup failure.
 - **No leaked stack traces** — `5xx` responses return generic messages; the full exception is logged server-side.
-- **Browser leak prevention** — Playwright is used in a `with` block; the watchdog marks orphaned jobs failed and the worker terminates the browser context on cancel.
-- **Resilience** — startup recovery walks `Scans` for `running` rows and marks them `failed`; new scans then start from a clean state.
+- **Resilience** — startup recovery walks `Scans` for `running` rows and marks them `failed`; new scans then start from a clean state. Finished jobs are pruned from the in-memory map after a TTL so the queue map can't grow forever.
 - **Payload registry** is `dataclass`-driven — adding a new vuln class is a single file with `Payload(...)` entries plus a `confirmation` callable; nothing else changes.
 - **Confidence scoring** uses signal compounding: encoding detection, baseline-size delta, DB-specific error patterns, and confirmation re-tests with payload variations.
 
