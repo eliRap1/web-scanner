@@ -38,9 +38,9 @@ Thumbs.db
 app/web_scanner.db
 web_scanner.db
 
-# Generated reports
-reports/
-!reports/.gitkeep
+# Generated reports (top-level only; app/reports/ is source code)
+/reports/
+!/reports/.gitkeep
 
 # Scratch / scraped data
 results.json

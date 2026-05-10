@@ -22,8 +22,11 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List
 from pathlib import Path
+import logging
 from jinja2 import Environment, FileSystemLoader
 from reports.remediation import get_remediation, REMEDIATION_GUIDE
+
+logger = logging.getLogger(__name__)
 
 # Report storage directory - stores generated HTML/PDF files
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
@@ -86,7 +89,7 @@ class ReportGenerator:
             json_report = self._generate_json_report(report_data)
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(json_report, f, indent=2, default=str)
-            print(f"JSON report generated successfully: {output_path}")
+            logger.info("JSON report generated: %s", output_path)
         elif format == "pdf":
             # Render HTML template for PDF generation
             template = self.env.get_template("report_template.html")
@@ -106,13 +109,13 @@ class ReportGenerator:
                         )
                         if not pisa_status.err:
                             pdf_generated = True
-                            print(f"PDF generated successfully with xhtml2pdf: {output_path}")
+                            logger.info("PDF generated with xhtml2pdf: %s", output_path)
                         else:
-                            print(f"xhtml2pdf error: {pisa_status.err}")
+                            logger.warning("xhtml2pdf error: %s", pisa_status.err)
                 except ImportError:
-                    print("xhtml2pdf not installed, trying weasyprint...")
+                    logger.info("xhtml2pdf not installed, trying weasyprint...")
                 except Exception as e:
-                    print(f"xhtml2pdf failed: {e}")
+                    logger.warning("xhtml2pdf failed: %s", e)
 
             # Try WeasyPrint as fallback (requires GTK on Windows)
             if not pdf_generated:
@@ -120,15 +123,15 @@ class ReportGenerator:
                     from weasyprint import HTML
                     HTML(string=html_content).write_pdf(str(output_path))
                     pdf_generated = True
-                    print(f"PDF generated successfully with WeasyPrint: {output_path}")
+                    logger.info("PDF generated with WeasyPrint: %s", output_path)
                 except (ImportError, OSError) as e:
-                    print(f"WeasyPrint unavailable: {e}")
+                    logger.info("WeasyPrint unavailable: %s", e)
                 except Exception as e:
-                    print(f"WeasyPrint failed: {e}")
+                    logger.warning("WeasyPrint failed: %s", e)
 
             # If all PDF methods failed, fall back to HTML
             if not pdf_generated:
-                print("All PDF generators failed, falling back to HTML format.")
+                logger.warning("All PDF generators failed, falling back to HTML format.")
                 output_path = REPORTS_DIR / f"{base_name}.html"
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(html_content)
@@ -241,4 +244,20 @@ class ReportGenerator:
             "stats": stats,
             "risk_score": risk_score,
             "remediation_guide": remediation_guide,
+        }
+
+    def _generate_json_report(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a JSON-serializable dict of the report data."""
+        # Repack only the fields that are safe to serialise directly
+        return {
+            "scan_id": report_data.get("scan_id"),
+            "target_url": report_data.get("target_url"),
+            "start_time": str(report_data.get("start_time", "")),
+            "end_time": str(report_data.get("end_time", "")),
+            "generated_at": report_data.get("generated_at"),
+            "status": report_data.get("status"),
+            "stats": report_data.get("stats", {}),
+            "risk_score": report_data.get("risk_score", 0),
+            "vulnerabilities": report_data.get("vulnerabilities", []),
+            "remediation_guide": report_data.get("remediation_guide", {}),
         }

@@ -5,12 +5,11 @@ from typing import Optional, Tuple, Dict, Any
 import os
 
 try:
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt as _bcrypt
 except ImportError as exc:  # pragma: no cover - hard requirement at runtime
     raise RuntimeError(
-        "passlib[bcrypt] is required for password hashing. "
-        "Install with: pip install 'passlib[bcrypt]'"
+        "bcrypt is required for password hashing. "
+        "Install with: pip install bcrypt"
     ) from exc
 
 # Allow overriding DB path for tests / different environments
@@ -263,7 +262,7 @@ def init_database():
     """Initialize database with proper error handling and logging"""
     logger.info(f"Initializing database: {DB_NAME}")
     logger.info(f"Current directory: {os.getcwd()}")
-    logger.info("Using password hashing: bcrypt")
+    logger.info("Using password hashing: bcrypt (direct)")
     
     try:
         conn = get_connection()
@@ -329,13 +328,13 @@ def can_access_report(user_role: str, user_id: int, report_user_id: int) -> bool
 # -------------------------------
 def hash_password(password: str) -> str:
     """Hash a password with bcrypt."""
-    return pwd_context.hash(password)
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """Verify a password against its bcrypt hash."""
     try:
-        return pwd_context.verify(password, stored_hash)
+        return _bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
     except Exception:
         logger.exception("Password verification error")
         return False
@@ -824,11 +823,11 @@ def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
     
     c = conn.cursor()
     rows = c.execute("""
-        SELECT * FROM Vulnerabilities 
-        WHERE scan_id = ? 
+        SELECT * FROM Vulnerabilities
+        WHERE scan_id = ?
         ORDER BY severity DESC, timestamp DESC
     """, (scan_id,)).fetchall()
-    return rows
+    return [dict(r) for r in rows]
 
 def save_graph_data(conn, scan_id: int, graph_data_json: str):
     """Save JSON-serialized graph analysis data for a scan."""
@@ -870,7 +869,7 @@ if __name__ == "__main__":
     print("="*60)
     print(f"Database file: {DB_NAME}")
     print(f"Current directory: {os.getcwd()}")
-    print("Password hashing: bcrypt")
+    print("Password hashing: bcrypt (direct)")
     print()
     
     try:
