@@ -823,11 +823,11 @@ def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
     
     c = conn.cursor()
     rows = c.execute("""
-        SELECT * FROM Vulnerabilities 
-        WHERE scan_id = ? 
+        SELECT * FROM Vulnerabilities
+        WHERE scan_id = ?
         ORDER BY severity DESC, timestamp DESC
     """, (scan_id,)).fetchall()
-    return rows
+    return [dict(r) for r in rows]
 
 def save_graph_data(conn, scan_id: int, graph_data_json: str):
     """Save JSON-serialized graph analysis data for a scan."""

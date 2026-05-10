@@ -95,7 +95,7 @@ def generate_report(
         vulns = db.get_vulnerabilities_for_scan(
             conn, scan_id, user["user_id"], user["role"]
         )
-        vuln_list = [dict(v) for v in vulns] if vulns else []
+        vuln_list = vulns if vulns else []
 
         # Generate report file
         report_path = generator.generate_report(

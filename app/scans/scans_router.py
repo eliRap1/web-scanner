@@ -315,11 +315,11 @@ def get_scan_vulnerabilities(job_id: str, request: Request):
     conn = db.get_connection()
     try:
         vulns = db.get_vulnerabilities_for_scan(
-            conn, 
-            db_scan_id, 
+            conn,
+            db_scan_id,
             request.state.user["user_id"],
             request.state.user["role"]
         )
-        return {"vulnerabilities": vulns}
+        return {"vulnerabilities": vulns if vulns else []}
     finally:
         conn.close()
