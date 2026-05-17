@@ -16,7 +16,7 @@ from scanner.models import ScanTarget
 from scanner.auth_manager import AuthenticationManager
 from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
 from db import database as db
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Dict
 from urllib.parse import urlparse
 import ipaddress
 import socket
@@ -183,7 +183,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
     }
 
 
-@router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, str]])
+@router.get("/{job_id}")
 def get_scan_status(job_id: str, request: Request):
     """
     Get the final results of a completed scan.
