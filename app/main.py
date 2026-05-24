@@ -21,6 +21,8 @@ from reports.reports_router import router as reports_router
 from db.database import init_database, ensure_admin_exists, get_connection, get_scans_for_user
 from fastapi.middleware.cors import CORSMiddleware
 from scanner.task_queue import recover_stuck_scans_on_startup
+from db.backup import start_scheduler
+import threading
 
 
 def _allowed_origins() -> list[str]:
@@ -49,6 +51,8 @@ async def lifespan(app: FastAPI):
     ensure_admin_exists()
     recover_stuck_scans_on_startup()
     start_worker()
+    backup_thread = threading.Thread(target=start_scheduler, daemon=True)
+    backup_thread.start()
     yield
 
 

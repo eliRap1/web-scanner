@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from db import database as db
-from reports.generator import ReportGenerator
+from reports.generator import ReportGenerator, REPORTS_DIR
 from typing import Optional
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -166,6 +166,16 @@ def download_report(report_id: int, request: Request):
         if not report_path or not Path(report_path).exists():
             raise HTTPException(status_code=404, detail="Report file not found. Please generate the report first.")
 
+        # Path traversal check: ensure the resolved path is inside REPORTS_DIR
+        try:
+            resolved = Path(report_path).resolve()
+            if not str(resolved).startswith(str(REPORTS_DIR.resolve())):
+                raise HTTPException(status_code=403, detail="Access denied")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=403, detail="Access denied")
+
         # Determine media type
         if report_path.endswith(".pdf"):
             media_type = "application/pdf"
@@ -203,6 +213,16 @@ def view_report(report_id: int, request: Request):
 
         if not report_path or not Path(report_path).exists():
             raise HTTPException(status_code=404, detail="Report file not found")
+
+        # Path traversal check: ensure the resolved path is inside REPORTS_DIR
+        try:
+            resolved = Path(report_path).resolve()
+            if not str(resolved).startswith(str(REPORTS_DIR.resolve())):
+                raise HTTPException(status_code=403, detail="Access denied")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=403, detail="Access denied")
 
         if not report_path.endswith(".html"):
             raise HTTPException(status_code=400, detail="Only HTML reports can be viewed inline")
