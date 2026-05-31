@@ -38,7 +38,11 @@ class AuthenticationManager:
                     break
             if login_form:
                 break
-        
+
+        if not login_form:
+            print("[-] No form with a password field found.")
+            return None
+
         payload = {}
         user_field_found = False
         
