@@ -455,7 +455,8 @@ def process_jobs():
             scan_thread.join(timeout=JOB_TIMEOUT_SECONDS)
 
             if scan_thread.is_alive():
-                # Timed out
+                # Timed out — signal the scanner to close its browser before marking failed
+                cancel_event.set()
                 set_job_failure(job_uuid, f"Timeout: scan exceeded {JOB_TIMEOUT_SECONDS} seconds")
             else:
                 if scan_result["ok"]:
