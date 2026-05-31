@@ -22,11 +22,20 @@ from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from db import database as db
-from reports.generator import ReportGenerator
+from reports.generator import ReportGenerator, REPORTS_DIR as _REPORTS_DIR
 from typing import Optional
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 generator = ReportGenerator()
+
+
+def _safe_report_path(report_path: str) -> Path:
+    """Resolve the path and ensure it is within REPORTS_DIR to prevent path traversal."""
+    resolved = Path(report_path).resolve()
+    allowed = _REPORTS_DIR.resolve()
+    if not str(resolved).startswith(str(allowed)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return resolved
 
 
 def get_user_from_request_or_token(request: Request, token: Optional[str] = None):
@@ -166,6 +175,8 @@ def download_report(report_id: int, request: Request):
         if not report_path or not Path(report_path).exists():
             raise HTTPException(status_code=404, detail="Report file not found. Please generate the report first.")
 
+        safe_path = _safe_report_path(report_path)
+
         # Determine media type
         if report_path.endswith(".pdf"):
             media_type = "application/pdf"
@@ -175,9 +186,9 @@ def download_report(report_id: int, request: Request):
             media_type = "text/html"
 
         return FileResponse(
-            path=report_path,
+            path=str(safe_path),
             media_type=media_type,
-            filename=Path(report_path).name
+            filename=safe_path.name
         )
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -207,7 +218,9 @@ def view_report(report_id: int, request: Request):
         if not report_path.endswith(".html"):
             raise HTTPException(status_code=400, detail="Only HTML reports can be viewed inline")
 
-        with open(report_path, "r", encoding="utf-8") as f:
+        safe_path = _safe_report_path(report_path)
+
+        with open(str(safe_path), "r", encoding="utf-8") as f:
             html_content = f.read()
 
         return HTMLResponse(content=html_content)
