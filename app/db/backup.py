@@ -59,7 +59,11 @@ def rotate_backups():
 def test_backup_recovery(backup_path: str) -> bool:
     test_db = "temp_recovery_test.db"
 
-    shutil.copy2(backup_path, test_db)
+    try:
+        shutil.copy2(backup_path, test_db)
+    except Exception as e:
+        logger.error(f"[RECOVERY TEST] Failed to copy backup: {e}")
+        return False
 
     conn = sqlite3.connect(test_db)
     c = conn.cursor()
