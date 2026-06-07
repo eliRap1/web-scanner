@@ -6,10 +6,12 @@ uvicorn[standard]>=0.30
 playwright>=1.45
 requests>=2.32
 urllib3>=2.2
-passlib[bcrypt]>=1.7
+bcrypt>=4.0
+beautifulsoup4>=4.12
 python-multipart>=0.0.9
 jinja2>=3.1
 pydantic>=2.7
+pydantic[email]>=2.7
 
 # Optional PDF rendering — pick one (WeasyPrint requires GTK on Windows).
 # weasyprint>=62
