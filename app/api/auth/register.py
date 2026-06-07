@@ -107,9 +107,11 @@ def register(payload: RegisterPayload):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        import logging
+        logging.getLogger("auth.register").exception("Registration failure")
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
     finally:
         conn.close()
 
