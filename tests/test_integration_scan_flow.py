@@ -27,22 +27,24 @@ def test_feature_4_6_end_to_end_scan_flow(app_client):
     headers = _auth_headers(token)
 
     # 3) start scan
-    r = app_client.post("/scan/", params={"url": "https://example.com", "max_pages": 1}, headers=headers)
+    r = app_client.post("/scan/", json={"url": "https://example.com", "max_pages": 1}, headers=headers)
     assert r.status_code == 200, r.text
     body = r.json()
     job_id = body.get("job_id") or body.get("scan_id") or body.get("id")
     assert job_id, f"Start scan response missing job id: {body}"
 
     # 4) poll progress until completed/failed
+    # Allow up to 15 s: background worker thread + FakeWebScanner can take a
+    # moment to start under load, so use a generous ceiling.
     status = None
-    for _ in range(80):
+    for _ in range(150):
         pr = app_client.get(f"/scan/{job_id}/progress", headers=headers)
         assert pr.status_code == 200, pr.text
         progress = pr.json()
         status = progress.get("status")
         if status in ("completed", "failed"):
             break
-        time.sleep(0.05)
+        time.sleep(0.1)
 
     assert status == "completed", f"Expected completed, got {status}"
 
