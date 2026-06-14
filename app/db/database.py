@@ -794,8 +794,18 @@ def get_scan_logs(conn, scan_id: int):
     ).fetchall()
     return [dict(r) for r in rows]
 
+_VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+
+
 def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity, confidence=0.8):
-    """Insert a vulnerability finding into database."""
+    """Insert a vulnerability finding into database.
+
+    The Vulnerabilities table only allows ('low','medium','high','critical').
+    Findings with severity 'info' (e.g. from security-header checks) are
+    normalised to 'low' so they are persisted rather than silently dropped
+    by the CHECK constraint.
+    """
+    normalised_severity = severity if severity in _VALID_SEVERITIES else "low"
     c = conn.cursor()
     c.execute("""
         INSERT INTO Vulnerabilities (
@@ -807,7 +817,7 @@ def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity
     """, (
         scan_id,
         vuln_type,
-        severity,
+        normalised_severity,
         payload,
         f"Vulnerability found in parameter '{param}' at {url}",
         f"Payload '{payload}' triggered vulnerability detection",
