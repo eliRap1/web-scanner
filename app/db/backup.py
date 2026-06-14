@@ -35,7 +35,17 @@ def create_backup():
     backup_name = f"backup_{timestamp}.db"
     backup_path = os.path.join(BACKUP_DIR, backup_name)
 
-    shutil.copy2(DB_FILE, backup_path)
+    # Use SQLite's online backup API instead of shutil.copy2 so that an
+    # in-progress write on the source DB does not produce a corrupt backup.
+    src = sqlite3.connect(DB_FILE)
+    try:
+        dst = sqlite3.connect(backup_path)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
 
     logger.info(f"[BACKUP] Created backup: {backup_path}")
     rotate_backups()
