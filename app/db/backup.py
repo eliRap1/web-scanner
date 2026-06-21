@@ -6,7 +6,9 @@ import schedule
 import time
 import logging
 
-DB_FILE = "web_scanner.db"
+# Honour the same env var used by db/database.py so backups target the
+# correct file regardless of deployment (e.g. Railway volume path).
+DB_FILE = os.environ.get("WEB_SCANNER_DB", "web_scanner.db")
 BACKUP_DIR = "db_backups"
 MAX_BACKUPS = 10
 

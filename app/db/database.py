@@ -5,12 +5,11 @@ from typing import Optional, Tuple, Dict, Any
 import os
 
 try:
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt as _bcrypt
 except ImportError as exc:  # pragma: no cover - hard requirement at runtime
     raise RuntimeError(
-        "passlib[bcrypt] is required for password hashing. "
-        "Install with: pip install 'passlib[bcrypt]'"
+        "bcrypt is required for password hashing. "
+        "Install with: pip install bcrypt"
     ) from exc
 
 # Allow overriding DB path for tests / different environments
@@ -329,13 +328,13 @@ def can_access_report(user_role: str, user_id: int, report_user_id: int) -> bool
 # -------------------------------
 def hash_password(password: str) -> str:
     """Hash a password with bcrypt."""
-    return pwd_context.hash(password)
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """Verify a password against its bcrypt hash."""
     try:
-        return pwd_context.verify(password, stored_hash)
+        return _bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
     except Exception:
         logger.exception("Password verification error")
         return False
@@ -607,6 +606,10 @@ def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 # ---------- Flask-style decorator ----------
+# TODO(audit): requires_role and requires_permission are Flask decorators in a
+# FastAPI codebase. Flask is not a project dependency; calling these at runtime
+# raises ImportError. Prefer fastapi_requires_role / fastapi_requires_permission
+# instead. Remove these once all call-sites (if any) are migrated.
 def requires_role(min_role: str):
     """Decorator for Flask routes requiring minimum role level."""
     def decorator(func):

@@ -23,15 +23,9 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from db import database as db
 from reports.generator import ReportGenerator
-from typing import Optional
-
 router = APIRouter(prefix="/reports", tags=["reports"])
 generator = ReportGenerator()
 
-
-def get_user_from_request_or_token(request: Request, token: Optional[str] = None):
-    """Backward-compat helper. Now defers entirely to middleware (no query token)."""
-    return getattr(request.state, "user", None)
 
 
 @router.get("/")
