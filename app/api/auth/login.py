@@ -206,14 +206,12 @@ def refresh_token(payload: RefreshPayload, request: Request):
 
 
 @router.get("/verify", response_model=VerifyResponse)
-def verify_token(request: Request, token: Optional[str] = None):
+def verify_token(request: Request):
     """Verify if a token is valid.
 
-    Token can be sent in:
-    - Preferred: Authorization: Bearer <token>
-    - Backward-compat: query parameter /verify?token=<token>
+    Token must be sent via the Authorization: Bearer <token> header.
     """
-    extracted = extract_token_from_request(request, token)
+    extracted = extract_token_from_request(request, None)
     user = database.get_user_from_token(extracted) if extracted else None
 
     if not user:
