@@ -19,10 +19,13 @@ from db import database as db
 from typing import List, Optional, Union, Dict
 from urllib.parse import urlparse
 import ipaddress
+import logging
 import socket
 import requests
 from scanner.task_queue import uuid_to_db_id
 from db.database import get_connection, get_logs_for_scan, get_scans_for_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["scanner"])
 
@@ -230,33 +233,24 @@ def get_scan_logs(job_id: str, request: Request):
     """
     Returns logs for a specific scan job.
     """
-    
-    
-    # 1. Get the DB scan_id from the UUID
-    db_scan_id = uuid_to_db_id.get(job_id)
-    
-    if not db_scan_id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # 2. Get current user
+    db_scan_id = _authorize_job_access(job_id, request)
     current_user = request.state.user
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    # 3. Fetch logs from database
+
+    # Fetch logs from database
     conn = get_connection()
     try:
         logs = get_logs_for_scan(
-            conn, 
-            db_scan_id, 
-            current_user["user_id"], 
+            conn,
+            db_scan_id,
+            current_user["user_id"],
             current_user["role"]
         )
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Failed to fetch logs for job %s", job_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         conn.close()
         
