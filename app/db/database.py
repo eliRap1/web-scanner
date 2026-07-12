@@ -1,5 +1,4 @@
 import sqlite3
-from functools import wraps
 import logging
 from typing import Optional, Tuple, Dict, Any
 import os
@@ -606,62 +605,6 @@ def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
-# ---------- Flask-style decorator ----------
-def requires_role(min_role: str):
-    """Decorator for Flask routes requiring minimum role level."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                from flask import request, abort
-            except ImportError:
-                raise RuntimeError("Flask not installed. Install with: pip install flask")
-
-            auth = request.headers.get("Authorization", "")
-            token = None
-            if auth.startswith("Bearer "):
-                token = auth.split(" ", 1)[1]
-            
-            user = get_user_from_token(token)
-            if not user:
-                abort(401, description="Unauthorized")
-
-            user_role = user.get("role")
-            if ROLE_MAP.get(user_role, 0) < ROLE_MAP.get(min_role, 0):
-                abort(403, description="Forbidden - insufficient role")
-            
-            kwargs["_current_user"] = user
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def requires_permission(permission: str):
-    """Decorator for Flask routes requiring specific permission."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                from flask import request, abort
-            except ImportError:
-                raise RuntimeError("Flask not installed")
-            
-            auth = request.headers.get("Authorization", "")
-            token = None
-            if auth.startswith("Bearer "):
-                token = auth.split(" ", 1)[1]
-            
-            user = get_user_from_token(token)
-            if not user:
-                abort(401, description="Unauthorized")
-            
-            if not user_has_permission(user.get("role"), permission):
-                abort(403, description="Forbidden - missing permission")
-            
-            kwargs["_current_user"] = user
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
 # ---------- FastAPI dependency injection ----------
 def fastapi_requires_role(min_role: str):
     """FastAPI dependency for role-based access control."""
@@ -824,9 +767,12 @@ def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
     
     c = conn.cursor()
     rows = c.execute("""
-        SELECT * FROM Vulnerabilities 
-        WHERE scan_id = ? 
-        ORDER BY severity DESC, timestamp DESC
+        SELECT * FROM Vulnerabilities
+        WHERE scan_id = ?
+        ORDER BY CASE severity
+          WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+          WHEN 'medium' THEN 2 WHEN 'low' THEN 3
+          ELSE 4 END ASC, timestamp DESC
     """, (scan_id,)).fetchall()
     return rows
 
