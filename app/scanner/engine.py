@@ -228,8 +228,10 @@ class ProductionCrawler:
         if self.db_scan_id:
             try:
                 conn = get_connection()
-                insert_log(conn, self.db_scan_id, level, message)
-                conn.close()
+                try:
+                    insert_log(conn, self.db_scan_id, level, message)
+                finally:
+                    conn.close()
             except Exception:
                 pass
 
