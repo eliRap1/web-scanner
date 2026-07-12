@@ -143,7 +143,12 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
 
     Raises 400 on URL/proxy validation failure, 401 if unauthenticated.
     """
-    # Step 0: Validate inputs early (SSRF defense)
+    # Step 0: Verify the requesting user is authenticated before doing anything else
+    current_user_id = request.state.user["user_id"] if request.state.user else None
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="User must be logged in to start a scan.")
+
+    # Step 1: Validate inputs (SSRF defense)
     url = _validate_target_url(payload.url)
     proxy = _validate_proxy(payload.proxy)
     target_login_url = (
@@ -151,7 +156,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
         if payload.target_login_url else None
     )
 
-    # Step 1: Handle target site authentication (if provided)
+    # Step 2: Handle target site authentication (if provided)
     cookies_to_pass = None
     if payload.target_username and payload.target_password and target_login_url:
         auth_manager = AuthenticationManager()
@@ -160,11 +165,6 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
         )
         if login_session:
             cookies_to_pass = requests.utils.dict_from_cookiejar(login_session.cookies)
-
-    # Step 2: Verify the requesting user is authenticated
-    current_user_id = request.state.user["user_id"] if request.state.user else None
-    if not current_user_id:
-        raise HTTPException(status_code=401, detail="User must be logged in to start a scan.")
 
     # Step 3: Queue the scan job for background processing
     job_id = add_job(
