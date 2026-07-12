@@ -104,7 +104,7 @@ def make_login_request(user_id: int) -> LoadTestResult:
     try:
         # Use unique credentials per user to avoid rate limiting issues
         response = requests.post(
-            f"{BASE_URL}/auth/login",
+            f"{BASE_URL}/login",
             data={
                 "username": f"loadtest_user_{user_id}",
                 "password": "testpassword123"
@@ -138,7 +138,7 @@ def make_scan_request(user_id: int, auth_token: Optional[str] = None) -> LoadTes
             headers["Authorization"] = f"Bearer {auth_token}"
 
         response = requests.post(
-            f"{BASE_URL}/scans/",
+            f"{BASE_URL}/scan/",
             json={
                 "url": f"http://example{user_id}.com",
                 "scan_type": "quick"

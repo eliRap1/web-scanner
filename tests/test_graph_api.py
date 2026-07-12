@@ -57,7 +57,7 @@ def _start_and_wait(client, token, url="https://example.com", max_pages=1, enabl
 
     r = client.post(
         "/scan/",
-        params={"url": url, "max_pages": max_pages, "enable_graph_analysis": enable_graph_analysis},
+        json={"url": url, "max_pages": max_pages, "enable_graph_analysis": enable_graph_analysis},
         headers=headers,
     )
     assert r.status_code == 200, r.text
