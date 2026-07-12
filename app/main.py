@@ -45,10 +45,13 @@ async def lifespan(app: FastAPI):
     Shutdown tasks:
     - (None currently - workers are daemon threads)
     """
+    import threading
+    from db.backup import start_scheduler
     init_database()
     ensure_admin_exists()
     recover_stuck_scans_on_startup()
     start_worker()
+    threading.Thread(target=start_scheduler, daemon=True).start()
     yield
 
 
