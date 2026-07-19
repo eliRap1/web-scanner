@@ -183,7 +183,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
     }
 
 
-@router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, str]])
+@router.get("/{job_id}")
 def get_scan_status(job_id: str, request: Request):
     """
     Get the final results of a completed scan.
