@@ -283,6 +283,7 @@ def set_job_result(job_uuid: str, result):
                             payload = finding.get("payload", "")
                             severity = finding.get("severity", "medium").lower()
                             confidence = finding.get("confidence", 0.8)
+                            confirmed = bool(finding.get("confirmed", False))
                         else:
                             vuln_type = getattr(finding, "vuln_type", "Unknown")
                             url = getattr(finding, "url", "")
@@ -290,10 +291,11 @@ def set_job_result(job_uuid: str, result):
                             payload = getattr(finding, "payload", "")
                             severity = getattr(finding, "severity", "medium").lower()
                             confidence = getattr(finding, "confidence", 0.8)
+                            confirmed = bool(getattr(finding, "confirmed", False))
 
                         insert_vulnerability(
                             conn, db_scan_id, url, parameter,
-                            vuln_type, payload, severity, confidence
+                            vuln_type, payload, severity, confidence, confirmed
                         )
                         findings_count += 1
                     except Exception as ve:

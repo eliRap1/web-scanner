@@ -794,7 +794,7 @@ def get_scan_logs(conn, scan_id: int):
     ).fetchall()
     return [dict(r) for r in rows]
 
-def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity, confidence=0.8):
+def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity, confidence=0.8, confirmed=False):
     """Insert a vulnerability finding into database."""
     c = conn.cursor()
     c.execute("""
@@ -803,13 +803,14 @@ def insert_vulnerability(conn, scan_id, url, param, vuln_type, payload, severity
             payload_used, description, confirmed, evidence,
             url, parameter, confidence
         )
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         scan_id,
         vuln_type,
         severity,
         payload,
         f"Vulnerability found in parameter '{param}' at {url}",
+        1 if confirmed else 0,
         f"Payload '{payload}' triggered vulnerability detection",
         url,
         param,
