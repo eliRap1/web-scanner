@@ -230,26 +230,15 @@ def get_scan_logs(job_id: str, request: Request):
     """
     Returns logs for a specific scan job.
     """
-    
-    
-    # 1. Get the DB scan_id from the UUID
-    db_scan_id = uuid_to_db_id.get(job_id)
-    
-    if not db_scan_id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # 2. Get current user
+    db_scan_id = _authorize_job_access(job_id, request)
+
     current_user = request.state.user
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    # 3. Fetch logs from database
     conn = get_connection()
     try:
         logs = get_logs_for_scan(
-            conn, 
-            db_scan_id, 
-            current_user["user_id"], 
+            conn,
+            db_scan_id,
+            current_user["user_id"],
             current_user["role"]
         )
         return logs
