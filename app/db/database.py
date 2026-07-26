@@ -606,6 +606,8 @@ def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
+# TODO(audit): Dead code — requires_role() and requires_permission() below import Flask
+# in a FastAPI-only project and are never called anywhere. Remove both functions.
 # ---------- Flask-style decorator ----------
 def requires_role(min_role: str):
     """Decorator for Flask routes requiring minimum role level."""

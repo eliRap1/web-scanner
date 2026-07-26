@@ -63,10 +63,17 @@ def app_client(temp_db, monkeypatch):
     """
     TestClient for the full FastAPI app (app/main.py) in Route A style.
     Uses the same temp DB set by temp_db fixture via WEB_SCANNER_DB.
+
+    Uses TestClient as a context manager so the FastAPI lifespan events
+    (startup: init_database, start_worker; shutdown: cleanup) are triggered.
+    Without the context manager, Starlette 1.x does not run the lifespan and
+    the background scan worker thread is never started, leaving all submitted
+    scans permanently in the 'pending' state.
     """
     import main
     importlib.reload(main)
-    return TestClient(main.app)
+    with TestClient(main.app) as client:
+        yield client
 
 
 @pytest.fixture(autouse=True)
