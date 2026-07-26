@@ -183,7 +183,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
     }
 
 
-@router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, str]])
+@router.get("/{job_id}")
 def get_scan_status(job_id: str, request: Request):
     """
     Get the final results of a completed scan.
@@ -196,8 +196,12 @@ def get_scan_status(job_id: str, request: Request):
         request: FastAPI request (for authentication)
 
     Returns:
-        List[ScanTarget] or dict: Scan results or error message
+        dict: Scan results (targets, findings, stats, graph_analysis, …) or error message
     """
+    # TODO(audit): response_model was Union[List[ScanTarget], Dict[str, str]] which does
+    # not match the actual rich nested dict returned by get_job_result(). Removed to
+    # avoid ResponseValidationError in FastAPI ≥0.115. A proper typed ScanResult model
+    # should be defined and used here once the response shape is stabilised.
     _authorize_job_access(job_id, request)
     return get_job_result(job_id)
 
@@ -256,10 +260,12 @@ def get_scan_logs(job_id: str, request: Request):
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
     except Exception as e:
+        # TODO(audit): detail=str(e) leaks internal exception messages to clients;
+        # replace with a generic message and log the real exception server-side.
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
-        
+
 def _authorize_job_access(job_id: str, request: Request) -> int:
     """
     Returns db_scan_id if the current user is allowed to access this job.

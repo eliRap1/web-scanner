@@ -58,13 +58,14 @@ def rotate_backups():
 # ---------------------------
 def test_backup_recovery(backup_path: str) -> bool:
     test_db = "temp_recovery_test.db"
-
-    shutil.copy2(backup_path, test_db)
-
-    conn = sqlite3.connect(test_db)
-    c = conn.cursor()
+    conn = None
 
     try:
+        shutil.copy2(backup_path, test_db)
+
+        conn = sqlite3.connect(test_db)
+        c = conn.cursor()
+
         integrity = c.execute("PRAGMA integrity_check;").fetchone()[0]
         if integrity != "ok":
             logger.error(f"[RECOVERY TEST] Integrity check FAILED for {backup_path}")
@@ -85,7 +86,8 @@ def test_backup_recovery(backup_path: str) -> bool:
         return False
 
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
         if os.path.exists(test_db):
             os.remove(test_db)
 

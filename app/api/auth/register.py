@@ -109,6 +109,8 @@ def register(payload: RegisterPayload):
         raise
     except Exception as e:
         conn.rollback()
+        # TODO(audit): detail=str(e) leaks internal error messages to clients;
+        # replace with a generic message and log the real exception server-side.
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         conn.close()
