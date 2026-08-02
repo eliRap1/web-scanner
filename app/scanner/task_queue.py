@@ -208,9 +208,8 @@ def set_job_status(job_uuid: str, status: str):
     Updates both in-memory status and Database status.
     Feature 4.5: when status becomes 'running' set start_time in progress + DB.
     """
-    db_scan_id = uuid_to_db_id.get(job_uuid)
-
     with job_lock:
+        db_scan_id = uuid_to_db_id.get(job_uuid)
         job_status[job_uuid] = status
         if job_uuid in job_progress:
             job_progress[job_uuid]["status"] = status
@@ -251,9 +250,8 @@ def set_job_result(job_uuid: str, result):
     """
     Saves result, updates status, marks end_time, saves vulnerabilities, and generates report.
     """
-    db_scan_id = uuid_to_db_id.get(job_uuid)
-
     with job_lock:
+        db_scan_id = uuid_to_db_id.get(job_uuid)
         job_results[job_uuid] = result
         job_status[job_uuid] = "completed"
         if job_uuid in job_progress:
@@ -369,6 +367,7 @@ def set_job_failure(job_uuid: str, error_message: str):
     Feature 4.5: compute end_time + duration for failed jobs too.
     """
     with job_lock:
+        db_scan_id = uuid_to_db_id.get(job_uuid)
         job_results[job_uuid] = {"error": error_message}
         job_status[job_uuid] = "failed"
         if job_uuid in job_progress:
@@ -380,7 +379,6 @@ def set_job_failure(job_uuid: str, error_message: str):
             st = job_progress[job_uuid].get("start_time")
             job_progress[job_uuid]["duration_seconds"] = round(now - st, 2) if st else None
 
-    db_scan_id = uuid_to_db_id.get(job_uuid)
     if db_scan_id:
         conn = get_connection()
         try:
