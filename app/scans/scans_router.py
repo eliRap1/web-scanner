@@ -320,6 +320,6 @@ def get_scan_vulnerabilities(job_id: str, request: Request):
             request.state.user["user_id"],
             request.state.user["role"]
         )
-        return {"vulnerabilities": vulns}
+        return {"vulnerabilities": [dict(v) for v in vulns]}
     finally:
         conn.close()

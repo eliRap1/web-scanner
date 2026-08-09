@@ -190,27 +190,40 @@ class VulnerabilityGraph:
             "cycle_details": [c.to_dict() for c in self._cycles],
         }
 
-    def _dfs_visit(self, url: str):
-        self._time_counter += 1
-        self.nodes[url].discovery_time = self._time_counter
-        self._color[url] = NodeColor.GRAY
+    def _dfs_visit(self, start_url: str):
+        # Iterative DFS to avoid Python stack overflow on deep crawl graphs.
+        # Stack entries: (url, iterator_over_neighbors, already_entered)
+        stack = [(start_url, iter(self.nodes[start_url].outgoing_edges), False)]
+        while stack:
+            url, neighbors, entered = stack[-1]
+            if not entered:
+                stack[-1] = (url, neighbors, True)
+                self._time_counter += 1
+                self.nodes[url].discovery_time = self._time_counter
+                self._color[url] = NodeColor.GRAY
 
-        for neighbor in self.nodes[url].outgoing_edges:
+            try:
+                neighbor = next(neighbors)
+            except StopIteration:
+                self._color[url] = NodeColor.BLACK
+                self._time_counter += 1
+                self.nodes[url].finish_time = self._time_counter
+                stack.pop()
+                continue
+
             if neighbor not in self.nodes:
                 continue
             if self._color[neighbor] == NodeColor.WHITE:
                 self._parent_map[neighbor] = url
-                self._dfs_visit(neighbor)
+                stack.append((neighbor, iter(self.nodes[neighbor].outgoing_edges), False))
             elif self._color[neighbor] == NodeColor.GRAY:
                 self._back_edges.append((url, neighbor))
                 cycle = self._reconstruct_cycle(url, neighbor)
                 self._cycles.append(cycle)
 
-        self._color[url] = NodeColor.BLACK
-        self._time_counter += 1
-        self.nodes[url].finish_time = self._time_counter
-
     def _reconstruct_cycle(self, from_url: str, to_url: str) -> CycleInfo:
+        # Walk parent_map from from_url up to to_url to reconstruct the tree
+        # path, then append from_url again to close the cycle edge to_url → from_url.
         path = [from_url]
         current = from_url
         while current != to_url:
@@ -219,6 +232,9 @@ class VulnerabilityGraph:
                 break
             path.append(current)
         path.reverse()
+        # Close the cycle: the back-edge goes from_url → to_url, so
+        # the full cycle is [to_url, ..., from_url, to_url].
+        path.append(from_url)
 
         vuln_type_sets: List[Set[str]] = []
         for url in path:

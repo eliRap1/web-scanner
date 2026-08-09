@@ -6,7 +6,7 @@ import schedule
 import time
 import logging
 
-DB_FILE = "web_scanner.db"
+DB_FILE = os.environ.get("WEB_SCANNER_DB", "web_scanner.db")
 BACKUP_DIR = "db_backups"
 MAX_BACKUPS = 10
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("backup_system")
 # Database helper
 # ---------------------------
 def get_connection():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE)  # noqa: S603 — backup uses same DB as main app
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
