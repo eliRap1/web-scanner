@@ -457,6 +457,7 @@ def process_jobs():
             if scan_thread.is_alive():
                 # Timed out
                 set_job_failure(job_uuid, f"Timeout: scan exceeded {JOB_TIMEOUT_SECONDS} seconds")
+                cancel_event.set()
             else:
                 if scan_result["ok"]:
                     result_data = scan_result["data"]

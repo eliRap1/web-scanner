@@ -38,7 +38,9 @@ class AuthenticationManager:
                     break
             if login_form:
                 break
-        
+        if not login_form:
+            return None
+
         payload = {}
         user_field_found = False
         
