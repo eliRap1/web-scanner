@@ -109,7 +109,7 @@ def register(payload: RegisterPayload):
         raise
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
     finally:
         conn.close()
 
