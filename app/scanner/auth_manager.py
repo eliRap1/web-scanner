@@ -16,7 +16,6 @@ class AuthenticationManager:
         # 0. STEP 0: Capture Cookies BEFORE login
         # We use .copy() so we don't reference the live object
         cookies_before = self.session.cookies.get_dict()
-        print(f"[*] Cookies Before: {cookies_before}")
 
         try:
             response = self.session.get(login_url, timeout=10)
@@ -39,9 +38,13 @@ class AuthenticationManager:
             if login_form:
                 break
         
+        if login_form is None:
+            print("[-] No password field found in any form on this page.")
+            return None
+
         payload = {}
         user_field_found = False
-        
+
         for field in login_form.fields:
             name_lower = field.name.lower()
             
@@ -69,8 +72,6 @@ class AuthenticationManager:
 
         # 2. STEP 2: Capture Cookies AFTER login
         cookies_after = self.session.cookies.get_dict()
-        print(f"[*] Cookies After:  {cookies_after}")
-        print(f"[*] Response Status: {post_resp.status_code}")
 
         # 3. STEP 3: The Reliable Check
         # If cookies changed (new keys or values changed), we are likely logged in
