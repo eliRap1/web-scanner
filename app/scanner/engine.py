@@ -224,12 +224,19 @@ class ProductionCrawler:
 
     def _log(self, level: str, message: str):
         """Log to database and console"""
-        logger.info(message) if level == "info" else logger.warning(message)
+        if level == "info":
+            logger.info(message)
+        elif level == "error":
+            logger.error(message)
+        else:
+            logger.warning(message)
         if self.db_scan_id:
             try:
                 conn = get_connection()
-                insert_log(conn, self.db_scan_id, level, message)
-                conn.close()
+                try:
+                    insert_log(conn, self.db_scan_id, level, message)
+                finally:
+                    conn.close()
             except Exception:
                 pass
 

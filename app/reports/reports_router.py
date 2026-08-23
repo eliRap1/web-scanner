@@ -137,7 +137,6 @@ def generate_report(
         return {
             "status": "ok",
             "report_id": report_id,
-            "report_path": report_path,
             "format": format,
             "message": "Report generated successfully"
         }

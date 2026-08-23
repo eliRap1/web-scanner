@@ -19,10 +19,13 @@ from db import database as db
 from typing import List, Optional, Union, Dict
 from urllib.parse import urlparse
 import ipaddress
+import logging
 import socket
 import requests
 from scanner.task_queue import uuid_to_db_id
 from db.database import get_connection, get_logs_for_scan, get_scans_for_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["scanner"])
 
@@ -256,7 +259,8 @@ def get_scan_logs(job_id: str, request: Request):
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to fetch scan logs for scan {db_scan_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
