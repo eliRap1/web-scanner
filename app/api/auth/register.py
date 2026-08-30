@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 import db.database as database
 from fastapi import APIRouter
@@ -109,7 +112,8 @@ def register(payload: RegisterPayload):
         raise
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        logger.exception("Registration failed: %s", e)
+        raise HTTPException(status_code=500, detail="Registration failed due to an internal error")
     finally:
         conn.close()
 
