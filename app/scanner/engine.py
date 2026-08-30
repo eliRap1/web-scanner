@@ -226,12 +226,15 @@ class ProductionCrawler:
         """Log to database and console"""
         logger.info(message) if level == "info" else logger.warning(message)
         if self.db_scan_id:
+            conn = None
             try:
                 conn = get_connection()
                 insert_log(conn, self.db_scan_id, level, message)
-                conn.close()
             except Exception:
                 pass
+            finally:
+                if conn:
+                    conn.close()
 
     def _report_progress(self, **kwargs):
         """Report progress via callback"""
