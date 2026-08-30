@@ -61,10 +61,9 @@ def _validate_target_url(url: str) -> str:
         # Resolve all addresses to catch DNS-rebinding tricks at submit time.
         addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
     except socket.gaierror:
-        # Allow scanning of unresolved hosts (lab/CTF), but still block obvious local strings.
-        addresses = set()
-        if host.lower() in {"localhost", "metadata.google.internal"}:
-            raise HTTPException(status_code=400, detail="Target host is not allowed")
+        # DNS resolution failed — treat unresolvable hosts as blocked to prevent
+        # SSRF bypass via non-resolvable hostnames that may resolve server-side.
+        raise HTTPException(status_code=400, detail="Target host could not be resolved")
 
     for addr in addresses:
         try:
