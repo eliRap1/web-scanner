@@ -230,33 +230,36 @@ def get_scan_logs(job_id: str, request: Request):
     """
     Returns logs for a specific scan job.
     """
-    
-    
+    import logging as _logging
+    _logger = _logging.getLogger("scans.router")
+
     # 1. Get the DB scan_id from the UUID
     db_scan_id = uuid_to_db_id.get(job_id)
-    
+
     if not db_scan_id:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     # 2. Get current user
     current_user = request.state.user
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
+
     # 3. Fetch logs from database
     conn = get_connection()
     try:
         logs = get_logs_for_scan(
-            conn, 
-            db_scan_id, 
-            current_user["user_id"], 
+            conn,
+            db_scan_id,
+            current_user["user_id"],
             current_user["role"]
         )
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        # Log the full exception server-side; never expose internal detail to clients.
+        _logger.exception("Failed to retrieve logs for job %s (db_scan_id=%s)", job_id, db_scan_id)
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
@@ -315,11 +318,14 @@ def get_scan_vulnerabilities(job_id: str, request: Request):
     conn = db.get_connection()
     try:
         vulns = db.get_vulnerabilities_for_scan(
-            conn, 
-            db_scan_id, 
+            conn,
+            db_scan_id,
             request.state.user["user_id"],
             request.state.user["role"]
         )
-        return {"vulnerabilities": vulns}
+        # get_vulnerabilities_for_scan returns sqlite3.Row objects, which are
+        # not JSON-serialisable by FastAPI's encoder. Convert each row to a
+        # plain dict so the response serialises correctly.
+        return {"vulnerabilities": [dict(v) for v in vulns] if vulns else []}
     finally:
         conn.close()
