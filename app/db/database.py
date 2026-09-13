@@ -607,6 +607,12 @@ def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 # ---------- Flask-style decorator ----------
+# TODO: requires_role and requires_permission below are dead code — the project
+# uses FastAPI, not Flask, and Flask is not in requirements.txt.  These decorators
+# import Flask at call time and would raise RuntimeError on any invocation.
+# Remove them together with requires_permission() in a future cleanup pass;
+# the FastAPI equivalents (fastapi_requires_role / fastapi_requires_permission)
+# already exist below.
 def requires_role(min_role: str):
     """Decorator for Flask routes requiring minimum role level."""
     def decorator(func):
