@@ -81,7 +81,13 @@ def _validate_target_url(url: str) -> str:
 
 
 def _validate_proxy(proxy: Optional[str]) -> Optional[str]:
-    """Allow only http(s) proxies. Reject schemes like file:// gopher:// etc."""
+    """Allow only http(s) proxies that resolve to public addresses.
+
+    Rejects non-http(s) schemes (file://, gopher://, …) and any proxy whose
+    hostname resolves to a private/loopback/link-local/reserved IP — the same
+    SSRF guard applied to scan targets — to prevent using the proxy field as
+    an SSRF side-channel into internal infrastructure.
+    """
     if not proxy:
         return None
     parsed = urlparse(proxy)
@@ -89,6 +95,26 @@ def _validate_proxy(proxy: Optional[str]) -> Optional[str]:
         raise HTTPException(status_code=400, detail="proxy must be http:// or https://")
     if not parsed.hostname:
         raise HTTPException(status_code=400, detail="proxy URL has no hostname")
+
+    host = parsed.hostname
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except socket.gaierror:
+        addresses = set()
+        if host.lower() in {"localhost", "metadata.google.internal"}:
+            raise HTTPException(status_code=400, detail="Proxy host is not allowed")
+
+    for addr in addresses:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            raise HTTPException(
+                status_code=400,
+                detail="Proxy resolves to a private or reserved address"
+            )
+
     return proxy
 
 
@@ -143,7 +169,15 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
 
     Raises 400 on URL/proxy validation failure, 401 if unauthenticated.
     """
-    # Step 0: Validate inputs early (SSRF defense)
+    # Step 0: Verify the requesting user is authenticated before doing any
+    # network work.  Previously this check came after auth_manager.login(),
+    # which allowed an unauthenticated caller to trigger arbitrary outbound
+    # login requests against target hosts.
+    current_user_id = request.state.user["user_id"] if request.state.user else None
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="User must be logged in to start a scan.")
+
+    # Step 1: Validate inputs (SSRF defense)
     url = _validate_target_url(payload.url)
     proxy = _validate_proxy(payload.proxy)
     target_login_url = (
@@ -151,7 +185,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
         if payload.target_login_url else None
     )
 
-    # Step 1: Handle target site authentication (if provided)
+    # Step 2: Handle target site authentication (if provided)
     cookies_to_pass = None
     if payload.target_username and payload.target_password and target_login_url:
         auth_manager = AuthenticationManager()
@@ -160,11 +194,6 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
         )
         if login_session:
             cookies_to_pass = requests.utils.dict_from_cookiejar(login_session.cookies)
-
-    # Step 2: Verify the requesting user is authenticated
-    current_user_id = request.state.user["user_id"] if request.state.user else None
-    if not current_user_id:
-        raise HTTPException(status_code=401, detail="User must be logged in to start a scan.")
 
     # Step 3: Queue the scan job for background processing
     job_id = add_job(
@@ -255,8 +284,10 @@ def get_scan_logs(job_id: str, request: Request):
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        import logging
+        logging.getLogger("scans.logs").exception("Failed to retrieve scan logs")
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
