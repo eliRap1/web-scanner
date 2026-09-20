@@ -44,6 +44,12 @@ WATCHDOG_INTERVAL_SECONDS = 10     # how often to check running jobs
 # Global Map to link UUID -> Integer Database ID.
 # Old entries are pruned by `_prune_finished_jobs` once a job's status is
 # completed/failed and a TTL passes — keeps in-memory state bounded.
+#
+# TODO: persist this mapping in the DB (e.g. a `job_uuid` column on Scans) so
+# that endpoints relying on uuid_to_db_id — /scan/{id}/logs, /vulnerabilities,
+# /graph, /progress — remain reachable after a server restart. Right now every
+# restart makes all pre-existing jobs return 404 from those endpoints even
+# though their data is still in the database. See audit/weekly-2026-09-20.
 uuid_to_db_id = {}
 
 # Per-job cancel events. Watchdog flips the event when a job exceeds its timeout

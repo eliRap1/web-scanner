@@ -821,14 +821,18 @@ def get_vulnerabilities_for_scan(conn, scan_id, user_id, user_role):
     """Get all vulnerabilities for a specific scan."""
     # Check access
     scan = get_scan_by_id(conn, scan_id, user_id, user_role)
-    
+
     c = conn.cursor()
     rows = c.execute("""
-        SELECT * FROM Vulnerabilities 
-        WHERE scan_id = ? 
+        SELECT * FROM Vulnerabilities
+        WHERE scan_id = ?
         ORDER BY severity DESC, timestamp DESC
     """, (scan_id,)).fetchall()
-    return rows
+    # Return plain dicts so callers can JSON-serialise without a Row proxy.
+    # Previously this function returned raw sqlite3.Row objects, unlike every
+    # other DB helper in this module, which caused serialisation errors at the
+    # /vulnerabilities endpoint.
+    return [dict(r) for r in rows]
 
 def save_graph_data(conn, scan_id: int, graph_data_json: str):
     """Save JSON-serialized graph analysis data for a scan."""
