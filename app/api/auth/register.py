@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
 import re
 
 import db.database as database
 from fastapi import APIRouter
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Standalone app — used by the auth-flow test suite which mounts only the
@@ -109,7 +113,8 @@ def register(payload: RegisterPayload):
         raise
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        logger.error("Registration error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Registration failed")
     finally:
         conn.close()
 
