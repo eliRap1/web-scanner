@@ -10,8 +10,12 @@ This module provides endpoints for:
 All endpoints require authentication via Bearer token.
 """
 
+import logging
+
 from fastapi import APIRouter, Request, HTTPException, Body
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 from scanner.models import ScanTarget
 from scanner.auth_manager import AuthenticationManager
 from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
@@ -256,7 +260,8 @@ def get_scan_logs(job_id: str, request: Request):
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching scan logs: %s", str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
