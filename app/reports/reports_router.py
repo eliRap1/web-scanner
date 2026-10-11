@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from db import database as db
-from reports.generator import ReportGenerator
+from reports.generator import ReportGenerator, REPORTS_DIR
 from typing import Optional
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -163,7 +163,15 @@ def download_report(report_id: int, request: Request):
         report_dict = dict(report)
         report_path = report_dict.get("report_path")
 
-        if not report_path or not Path(report_path).exists():
+        if not report_path:
+            raise HTTPException(status_code=404, detail="Report file not found. Please generate the report first.")
+
+        # Guard against path traversal: ensure the path stays within REPORTS_DIR.
+        resolved = Path(report_path).resolve()
+        if not str(resolved).startswith(str(REPORTS_DIR.resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        if not resolved.exists():
             raise HTTPException(status_code=404, detail="Report file not found. Please generate the report first.")
 
         # Determine media type
@@ -175,9 +183,9 @@ def download_report(report_id: int, request: Request):
             media_type = "text/html"
 
         return FileResponse(
-            path=report_path,
+            path=str(resolved),
             media_type=media_type,
-            filename=Path(report_path).name
+            filename=resolved.name
         )
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
