@@ -39,9 +39,13 @@ class AuthenticationManager:
             if login_form:
                 break
         
+        if login_form is None:
+            print("[-] Login form found but no password field detected.")
+            return None
+
         payload = {}
         user_field_found = False
-        
+
         for field in login_form.fields:
             name_lower = field.name.lower()
             

@@ -61,9 +61,14 @@ def _validate_target_url(url: str) -> str:
         # Resolve all addresses to catch DNS-rebinding tricks at submit time.
         addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
     except socket.gaierror:
-        # Allow scanning of unresolved hosts (lab/CTF), but still block obvious local strings.
+        # Unresolvable host — block anything that looks like an internal name.
         addresses = set()
-        if host.lower() in {"localhost", "metadata.google.internal"}:
+        _BLOCKED_HOSTS = {
+            "localhost", "metadata.google.internal",
+            "169.254.169.254",  # AWS/GCP/Azure IMDS
+        }
+        lower_host = host.lower()
+        if lower_host in _BLOCKED_HOSTS or lower_host.endswith(".local") or lower_host.endswith(".internal"):
             raise HTTPException(status_code=400, detail="Target host is not allowed")
 
     for addr in addresses:
@@ -81,7 +86,7 @@ def _validate_target_url(url: str) -> str:
 
 
 def _validate_proxy(proxy: Optional[str]) -> Optional[str]:
-    """Allow only http(s) proxies. Reject schemes like file:// gopher:// etc."""
+    """Allow only http(s) proxies with publicly-routable hostnames."""
     if not proxy:
         return None
     parsed = urlparse(proxy)
@@ -89,6 +94,17 @@ def _validate_proxy(proxy: Optional[str]) -> Optional[str]:
         raise HTTPException(status_code=400, detail="proxy must be http:// or https://")
     if not parsed.hostname:
         raise HTTPException(status_code=400, detail="proxy URL has no hostname")
+    try:
+        proxy_addresses = {info[4][0] for info in socket.getaddrinfo(parsed.hostname, None)}
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="proxy hostname could not be resolved")
+    for addr in proxy_addresses:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            raise HTTPException(status_code=400, detail="proxy resolves to a private or reserved address")
     return proxy
 
 
@@ -320,6 +336,6 @@ def get_scan_vulnerabilities(job_id: str, request: Request):
             request.state.user["user_id"],
             request.state.user["role"]
         )
-        return {"vulnerabilities": vulns}
+        return {"vulnerabilities": [dict(v) for v in vulns] if vulns else []}
     finally:
         conn.close()
