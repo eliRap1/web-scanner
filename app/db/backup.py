@@ -6,7 +6,7 @@ import schedule
 import time
 import logging
 
-DB_FILE = "web_scanner.db"
+DB_FILE = os.environ.get("WEB_SCANNER_DB", "web_scanner.db")
 BACKUP_DIR = "db_backups"
 MAX_BACKUPS = 10
 
@@ -57,7 +57,7 @@ def rotate_backups():
 # Recovery Testing
 # ---------------------------
 def test_backup_recovery(backup_path: str) -> bool:
-    test_db = "temp_recovery_test.db"
+    test_db = backup_path + ".recovery_test.tmp"
 
     shutil.copy2(backup_path, test_db)
 
