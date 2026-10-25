@@ -233,8 +233,11 @@ def get_scan_logs(job_id: str, request: Request):
     
     
     # 1. Get the DB scan_id from the UUID
+    # TODO(audit): uuid_to_db_id is in-memory only; after a server restart or 1-hour
+    # TTL prune, all previously completed scans become unreachable via their UUID.
+    # Fix: store the UUID in the Scans table and add a DB fallback lookup here.
     db_scan_id = uuid_to_db_id.get(job_id)
-    
+
     if not db_scan_id:
         raise HTTPException(status_code=404, detail="Job not found")
     
@@ -269,7 +272,7 @@ def _authorize_job_access(job_id: str, request: Request) -> int:
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # uuid -> db scan id
+    # uuid -> db scan id (in-memory only; see TODO in get_scan_logs)
     db_scan_id = uuid_to_db_id.get(job_id)
     if not db_scan_id:
         raise HTTPException(status_code=404, detail="Scan job not found")
