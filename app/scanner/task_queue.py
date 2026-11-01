@@ -208,9 +208,8 @@ def set_job_status(job_uuid: str, status: str):
     Updates both in-memory status and Database status.
     Feature 4.5: when status becomes 'running' set start_time in progress + DB.
     """
-    db_scan_id = uuid_to_db_id.get(job_uuid)
-
     with job_lock:
+        db_scan_id = uuid_to_db_id.get(job_uuid)
         job_status[job_uuid] = status
         if job_uuid in job_progress:
             job_progress[job_uuid]["status"] = status
