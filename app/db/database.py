@@ -268,7 +268,14 @@ def init_database():
     try:
         conn = get_connection()
         logger.info("Database connection established")
-        
+
+        # WAL mode is persistent (stored in the DB file) and dramatically reduces
+        # "database is locked" errors when the scanner worker thread and the FastAPI
+        # request handlers all hit the same DB concurrently.
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.commit()
+        logger.info("WAL journal mode enabled")
+
         try:
             apply_migrations(conn)
             logger.info("Migrations completed successfully")
