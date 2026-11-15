@@ -255,8 +255,10 @@ def get_scan_logs(job_id: str, request: Request):
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        import logging as _logging
+        _logging.getLogger("scans.logs").exception("Failed to fetch logs for scan %s", db_scan_id)
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
