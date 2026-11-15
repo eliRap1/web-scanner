@@ -71,7 +71,8 @@ def _validate_target_url(url: str) -> str:
             ip = ipaddress.ip_address(addr)
         except ValueError:
             continue
-        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        if (ip.is_loopback or ip.is_private or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
             raise HTTPException(
                 status_code=400,
                 detail="Target resolves to a private or reserved address"
@@ -255,8 +256,10 @@ def get_scan_logs(job_id: str, request: Request):
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        import logging as _logging
+        _logging.getLogger("scans.logs").exception("Failed to fetch logs for scan %s", db_scan_id)
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan logs")
     finally:
         conn.close()
         
