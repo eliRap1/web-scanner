@@ -71,7 +71,8 @@ def _validate_target_url(url: str) -> str:
             ip = ipaddress.ip_address(addr)
         except ValueError:
             continue
-        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        if (ip.is_loopback or ip.is_private or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
             raise HTTPException(
                 status_code=400,
                 detail="Target resolves to a private or reserved address"
