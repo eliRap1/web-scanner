@@ -606,61 +606,10 @@ def get_user_from_token(token: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
-# ---------- Flask-style decorator ----------
-def requires_role(min_role: str):
-    """Decorator for Flask routes requiring minimum role level."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                from flask import request, abort
-            except ImportError:
-                raise RuntimeError("Flask not installed. Install with: pip install flask")
-
-            auth = request.headers.get("Authorization", "")
-            token = None
-            if auth.startswith("Bearer "):
-                token = auth.split(" ", 1)[1]
-            
-            user = get_user_from_token(token)
-            if not user:
-                abort(401, description="Unauthorized")
-
-            user_role = user.get("role")
-            if ROLE_MAP.get(user_role, 0) < ROLE_MAP.get(min_role, 0):
-                abort(403, description="Forbidden - insufficient role")
-            
-            kwargs["_current_user"] = user
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def requires_permission(permission: str):
-    """Decorator for Flask routes requiring specific permission."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                from flask import request, abort
-            except ImportError:
-                raise RuntimeError("Flask not installed")
-            
-            auth = request.headers.get("Authorization", "")
-            token = None
-            if auth.startswith("Bearer "):
-                token = auth.split(" ", 1)[1]
-            
-            user = get_user_from_token(token)
-            if not user:
-                abort(401, description="Unauthorized")
-            
-            if not user_has_permission(user.get("role"), permission):
-                abort(403, description="Forbidden - missing permission")
-            
-            kwargs["_current_user"] = user
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+# NOTE: Flask-style requires_role / requires_permission decorators were
+# removed — this project uses FastAPI (not Flask), and Flask is not in
+# requirements.txt. The FastAPI equivalents below (fastapi_requires_role,
+# fastapi_requires_permission) remain available as dependency injectors.
 
 # ---------- FastAPI dependency injection ----------
 def fastapi_requires_role(min_role: str):
