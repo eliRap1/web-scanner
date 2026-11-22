@@ -27,7 +27,7 @@ def test_feature_4_6_end_to_end_scan_flow(app_client):
     headers = _auth_headers(token)
 
     # 3) start scan
-    r = app_client.post("/scan/", params={"url": "https://example.com", "max_pages": 1}, headers=headers)
+    r = app_client.post("/scan/", json={"url": "https://example.com", "max_pages": 1}, headers=headers)
     assert r.status_code == 200, r.text
     body = r.json()
     job_id = body.get("job_id") or body.get("scan_id") or body.get("id")

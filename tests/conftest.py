@@ -63,10 +63,14 @@ def app_client(temp_db, monkeypatch):
     """
     TestClient for the full FastAPI app (app/main.py) in Route A style.
     Uses the same temp DB set by temp_db fixture via WEB_SCANNER_DB.
+
+    Must be used with the context manager so the lifespan (which starts the
+    background worker) actually runs during the test.
     """
     import main
     importlib.reload(main)
-    return TestClient(main.app)
+    with TestClient(main.app) as client:
+        yield client
 
 
 @pytest.fixture(autouse=True)
