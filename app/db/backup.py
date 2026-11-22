@@ -6,7 +6,7 @@ import schedule
 import time
 import logging
 
-DB_FILE = "web_scanner.db"
+DB_FILE = os.environ.get("WEB_SCANNER_DB", "web_scanner.db")
 BACKUP_DIR = "db_backups"
 MAX_BACKUPS = 10
 

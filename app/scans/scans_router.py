@@ -16,7 +16,7 @@ from scanner.models import ScanTarget
 from scanner.auth_manager import AuthenticationManager
 from scanner.task_queue import add_job, get_job_status, get_job_result, get_job_progress
 from db import database as db
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Any
 from urllib.parse import urlparse
 import ipaddress
 import socket
@@ -183,7 +183,7 @@ def start_scan(request: Request, payload: StartScanRequest = Body(...)):
     }
 
 
-@router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, str]])
+@router.get("/{job_id}", response_model=Union[List[ScanTarget], Dict[str, Any]])
 def get_scan_status(job_id: str, request: Request):
     """
     Get the final results of a completed scan.
@@ -255,8 +255,10 @@ def get_scan_logs(job_id: str, request: Request):
         return logs
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        import logging as _logging
+        _logging.getLogger("scans.logs").exception("Failed to retrieve logs for scan %s", db_scan_id)
+        raise HTTPException(status_code=500, detail="Failed to retrieve logs")
     finally:
         conn.close()
         
